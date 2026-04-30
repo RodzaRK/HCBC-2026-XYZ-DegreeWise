@@ -2199,38 +2199,36 @@ function syncLookupDetail(row, course) {
   const parts = [];
 
   if (course.courseStatus === "loading" || course.courseStatus === "searching") {
-    parts.push("Looking up course catalog matches...");
+    parts.push('<span class="lookup-chip muted">Course lookup...</span>');
   } else if (course.courseStatus === "not-found") {
-    parts.push("No course match found yet.");
+    parts.push('<span class="lookup-chip warn">No course match</span>');
   } else if (course.courseStatus === "error") {
-    parts.push("Course lookup is offline. Local scoring still works.");
+    parts.push('<span class="lookup-chip warn">Course lookup offline</span>');
   }
 
   if (course.courseInfo) {
     const info = course.courseInfo;
     const source = sourceLabel(info.source || course.courseProvider);
     const title = `${escapeHtml(info.code)} - ${escapeHtml(info.title || "Course title unavailable")}`;
-    const workload = info.workloadHours ? `, ${escapeHtml(info.workloadHours)} hrs/week` : "";
-    const offered = info.offered?.length ? `, ${escapeHtml(info.offered.join("/"))}` : "";
-    const description = info.description ? `, ${escapeHtml(info.description)}` : "";
+    const credits = info.credits ? `<span class="source-tag">${escapeHtml(info.credits)} cr</span>` : "";
     const link = safeUrl(info.url)
       ? `<a href="${escapeAttribute(info.url)}" target="_blank" rel="noreferrer"><strong>${title}</strong></a>`
       : `<strong>${title}</strong>`;
-    parts.push(`${link} (${escapeHtml(info.credits)} credits${workload}${offered}${description}) <span class="source-tag">${escapeHtml(source)}</span>`);
+    parts.push(`<span class="lookup-chip">${link}${credits}<span class="source-tag">${escapeHtml(source)}</span></span>`);
   }
 
   if (course.professorStatus === "loading" || course.professorStatus === "searching") {
-    parts.push("Looking up professor ratings...");
+    parts.push('<span class="lookup-chip muted">Professor lookup...</span>');
   } else if (course.professorStatus === "not-found") {
-    parts.push("No professor rating found yet.");
+    parts.push('<span class="lookup-chip warn">No professor rating</span>');
   } else if (course.professorStatus === "error") {
-    parts.push("Professor lookup is offline.");
+    parts.push('<span class="lookup-chip warn">Professor lookup offline</span>');
   }
 
   if (course.professorSignal && course.professorSignal.rating > 0) {
     const signal = course.professorSignal;
     const source = sourceLabel(signal.source);
-    parts.push(`<strong>${escapeHtml(signal.name)}</strong>: ${escapeHtml(signal.rating.toFixed(1))}/5 rating, ${escapeHtml(signal.difficulty.toFixed(1))}/5 difficulty <span class="source-tag">${escapeHtml(source)}</span>`);
+    parts.push(`<span class="lookup-chip"><strong>${escapeHtml(signal.name)}</strong><span class="source-tag">${escapeHtml(signal.rating.toFixed(1))}/5</span><span class="source-tag">${escapeHtml(signal.difficulty.toFixed(1))} diff</span><span class="source-tag">${escapeHtml(source)}</span></span>`);
   }
 
   detail.innerHTML = parts.join(" ");
@@ -2591,9 +2589,12 @@ function currentUniversity() {
 
 function setApiStatus(text, mode) {
   apiStatus.querySelector(".api-status-label").textContent = text;
+  apiStatus.setAttribute("aria-label", text);
+  apiStatus.title = text;
   const dot = apiStatus.querySelector(".status-dot");
   dot.classList.toggle("pending", mode === "pending");
   dot.classList.toggle("offline", mode === "offline");
+  dot.classList.toggle("online", mode === "online");
 }
 
 function reportGeminiFallback(context, detail) {
@@ -2610,11 +2611,13 @@ function setAiStatus(text, mode, detail = "") {
       ? "Checking whether Gemini can answer this request"
       : "Using the local fallback analysis";
   aiStatus.title = detail ? `${baseTitle}. Last Gemini error: ${detail}` : baseTitle;
+  aiStatus.setAttribute("aria-label", text);
 
   const dot = aiStatus.querySelector(".status-dot");
   dot.classList.toggle("pending", mode === "pending");
   dot.classList.toggle("offline", mode === "offline");
   dot.classList.toggle("local", mode === "local");
+  dot.classList.toggle("online", mode === "online");
 }
 
 function clearRemoteSignals() {

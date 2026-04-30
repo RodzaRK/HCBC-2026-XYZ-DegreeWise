@@ -1632,7 +1632,8 @@ def build_gemini_chat_prompt(payload, question):
     conversation_text = json.dumps(conversation, ensure_ascii=True) if conversation else "[]"
     return (
         "You are DegreeWise, a concise college schedule assistant. "
-        "Answer the student's question using the current schedule data and the 4-year degree plan when available. "
+        "Answer the student's question using the current schedule data, what-if simulation state, prerequisite warnings, "
+        "backup plan options, campus-life balance, and the 4-year degree plan when available. "
         "Mention uncertainty when professor, course, prerequisite, or catalog data is pending. "
         "Do not claim official advising authority, and do not make medical claims. "
         "Use the recent conversation when the student asks follow-up questions like 'it', 'that', 'switch it out', or 'repeat that'. "
@@ -1678,6 +1679,10 @@ def compact_ai_payload(payload):
         "localRisk": payload.get("localRisk") if isinstance(payload.get("localRisk"), dict) else {},
         "breakdown": compact_breakdown(payload.get("breakdown")),
         "degreePlan": compact_degree_plan(payload.get("degreePlan")),
+        "lifeBalance": payload.get("lifeBalance") if isinstance(payload.get("lifeBalance"), dict) else {},
+        "prerequisiteWarnings": payload.get("prerequisiteWarnings") if isinstance(payload.get("prerequisiteWarnings"), list) else [],
+        "backupPlans": payload.get("backupPlans") if isinstance(payload.get("backupPlans"), list) else [],
+        "simulation": payload.get("simulation") if isinstance(payload.get("simulation"), dict) else {},
         "conversation": compact_chat_history(payload.get("conversation")),
     }
 

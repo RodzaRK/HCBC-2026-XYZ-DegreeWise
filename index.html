@@ -37,17 +37,14 @@
           <button class="icon-button theme-button" id="themeToggle" type="button" aria-label="Toggle color theme" title="Toggle color theme">
             <span aria-hidden="true">T</span>
           </button>
-          <div class="api-badge" id="apiStatus" title="Backend API status">
+          <button class="secondary-button" id="advisorExport" type="button">Advisor Export</button>
+          <div class="api-badge status-indicator" id="apiStatus" title="Backend API status" aria-label="Checking API">
             <span class="status-dot pending" aria-hidden="true"></span>
-            <span class="api-status-label">Checking API</span>
+            <span class="api-status-label sr-only">Checking API</span>
           </div>
-          <div class="ai-badge" id="aiStatus" title="AI source used for burnout, recommendations, and chat">
+          <div class="ai-badge status-indicator" id="aiStatus" title="AI source used for burnout, recommendations, and chat" aria-label="AI checking">
             <span class="status-dot pending" aria-hidden="true"></span>
-            <span class="ai-status-label">AI checking</span>
-          </div>
-          <div class="privacy-badge" title="The backend does not save schedules or create user accounts">
-            <span class="status-dot" aria-hidden="true"></span>
-            No saved records
+            <span class="ai-status-label sr-only">AI checking</span>
           </div>
         </div>
       </header>
@@ -61,6 +58,26 @@
             </div>
             <button class="secondary-button" id="resetDemo" type="button">Reset Demo</button>
           </div>
+
+          <section class="simulator-card" aria-label="What-if schedule simulator">
+            <div class="section-heading compact">
+              <div>
+                <p class="eyebrow">What-If Simulator</p>
+                <h2 id="simulationTitle">Live Plan</h2>
+              </div>
+              <div class="simulation-actions">
+                <button class="secondary-button" id="startSimulation" type="button">Start Simulation</button>
+                <button class="primary-button" id="saveSimulation" type="button" hidden>Save</button>
+                <button class="secondary-button" id="discardSimulation" type="button" hidden>Discard</button>
+              </div>
+            </div>
+            <p class="simulation-status" id="simulationStatus">Make edits normally, or start a temporary simulation before changing the plan.</p>
+            <div class="what-if-actions">
+              <button class="secondary-button" id="simulateAddLight" type="button">Add Light Gen Ed</button>
+              <button class="secondary-button" id="simulateMoveHardest" type="button">Move Hardest Later</button>
+              <button class="secondary-button" id="simulateSwapLoad" type="button">Swap Load</button>
+            </div>
+          </section>
 
           <div class="semesters" id="semesters" aria-live="polite"></div>
 
@@ -83,6 +100,25 @@
               </div>
             </div>
             <div class="detail-list" id="detailBreakdown"></div>
+          </section>
+
+          <section class="detail-card workspace-breakdown">
+            <div class="section-heading compact">
+              <div>
+                <p class="eyebrow">Advisor Mode</p>
+                <h2>Readiness Checks</h2>
+              </div>
+            </div>
+            <div class="advisor-check-grid">
+              <section class="check-panel">
+                <h3>Prerequisites</h3>
+                <div id="prerequisiteWarnings" class="check-list"></div>
+              </section>
+              <section class="check-panel">
+                <h3>Backup Plans</h3>
+                <div id="backupPlanList" class="check-list"></div>
+              </section>
+            </div>
           </section>
         </section>
 
@@ -108,6 +144,18 @@
               <span>Watch</span>
               <span>Heavy</span>
             </div>
+          </section>
+
+          <section class="life-card">
+            <div class="section-heading compact">
+              <div>
+                <p class="eyebrow">Campus Life</p>
+                <h2 id="lifeBalanceLabel">Livable</h2>
+              </div>
+              <output id="lifeBalanceScore" class="score-pill" aria-live="polite">78%</output>
+            </div>
+            <div class="life-meter" aria-hidden="true"><span id="lifeBalanceMeter"></span></div>
+            <ul class="life-reason-list" id="lifeBalanceReasons"></ul>
           </section>
 
           <section class="alternatives-card">
@@ -203,6 +251,29 @@
         <button class="icon-button remove-class" type="button" aria-label="Remove class" title="Remove class">
           <span aria-hidden="true">x</span>
         </button>
+
+        <details class="class-meta-row">
+          <summary>Timing & mode</summary>
+          <div class="class-meta-fields">
+            <label>
+              <span>Days</span>
+              <input class="class-days" type="text" placeholder="MWF" aria-label="Meeting days">
+            </label>
+            <label>
+              <span>Start</span>
+              <input class="class-start" type="time" aria-label="Start time">
+            </label>
+            <label>
+              <span>Mode</span>
+              <select class="class-modality" aria-label="Class modality">
+                <option value="">Auto</option>
+                <option value="in-person">In person</option>
+                <option value="online">Online</option>
+                <option value="hybrid">Hybrid</option>
+              </select>
+            </label>
+          </div>
+        </details>
 
         <div class="lookup-detail" aria-live="polite"></div>
       </div>
