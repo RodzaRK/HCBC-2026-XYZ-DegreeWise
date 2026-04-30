@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="DegreeWise dashboard for planning balanced academic schedules.">
+    <title>DegreeWise</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar" aria-label="Student setup">
+        <div class="brand-block">
+          <div class="brand-mark" aria-hidden="true">DW</div>
+          <div>
+            <p class="eyebrow">DegreeWise</p>
+            <h1>Schedule Balance Dashboard</h1>
+          </div>
+        </div>
+
+        <form class="profile-grid" aria-label="User profile setup">
+          <label class="field">
+            <span>University</span>
+            <input id="university" type="text" value="Southeast Missouri State University" autocomplete="organization">
+          </label>
+          <label class="field">
+            <span>Major</span>
+            <input id="major" type="text" value="Computer Science" autocomplete="off">
+          </label>
+          <label class="field small-field">
+            <span>Credits Completed</span>
+            <input id="creditsCompleted" type="number" min="0" max="180" value="46">
+          </label>
+        </form>
+
+        <div class="top-actions">
+          <button class="icon-button theme-button" id="themeToggle" type="button" aria-label="Toggle color theme" title="Toggle color theme">
+            <span aria-hidden="true">T</span>
+          </button>
+          <div class="api-badge" id="apiStatus" title="Backend API status">
+            <span class="status-dot pending" aria-hidden="true"></span>
+            <span class="api-status-label">Checking API</span>
+          </div>
+          <div class="ai-badge" id="aiStatus" title="AI source used for burnout, recommendations, and chat">
+            <span class="status-dot pending" aria-hidden="true"></span>
+            <span class="ai-status-label">AI checking</span>
+          </div>
+          <div class="privacy-badge" title="The backend does not save schedules or create user accounts">
+            <span class="status-dot" aria-hidden="true"></span>
+            No saved records
+          </div>
+        </div>
+      </header>
+
+      <main class="dashboard-grid">
+        <section class="workspace" aria-label="Semester builder">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Semester Builder</p>
+              <h2>Current Plan</h2>
+            </div>
+            <button class="secondary-button" id="resetDemo" type="button">Reset Demo</button>
+          </div>
+
+          <div class="semesters" id="semesters" aria-live="polite"></div>
+
+          <section class="breakdown-card workspace-breakdown">
+            <div class="section-heading compact">
+              <div>
+                <p class="eyebrow">Brief Breakdown</p>
+                <h2>Semester Difficulty</h2>
+              </div>
+            </div>
+            <div class="brief-score-grid" id="briefScoreGrid"></div>
+            <p class="schedule-comment" id="scheduleComment"></p>
+          </section>
+
+          <section class="detail-card workspace-breakdown">
+            <div class="section-heading compact">
+              <div>
+                <p class="eyebrow">Detailed Breakdown</p>
+                <h2>Classes & Burnout</h2>
+              </div>
+            </div>
+            <div class="detail-list" id="detailBreakdown"></div>
+          </section>
+        </section>
+
+        <aside class="analytics-panel" aria-label="Analytics and results">
+          <section class="risk-card">
+            <div class="section-heading compact">
+              <div>
+                <p class="eyebrow">Burnout Risk</p>
+                <h2 id="riskLabel">Balanced</h2>
+              </div>
+              <output id="riskScore" class="score-pill" aria-live="polite">42%</output>
+            </div>
+            <div class="gauge-wrap" aria-hidden="true">
+              <div class="gauge" id="riskGauge">
+                <div class="gauge-core">
+                  <span id="riskGaugeText">42</span>
+                  <small>risk</small>
+                </div>
+              </div>
+            </div>
+            <div class="risk-scale" aria-hidden="true">
+              <span>Light</span>
+              <span>Watch</span>
+              <span>Heavy</span>
+            </div>
+          </section>
+
+          <section class="alternatives-card">
+            <div class="section-heading compact">
+              <div>
+                <p class="eyebrow">Next Steps</p>
+                <h2>Recommendations</h2>
+              </div>
+            </div>
+            <ul class="suggestion-list" id="suggestionList"></ul>
+          </section>
+
+          <section class="chat-card">
+            <div class="section-heading compact">
+              <div>
+                <p class="eyebrow">Schedule Chat</p>
+                <h2>Ask About Classes</h2>
+              </div>
+            </div>
+            <div class="chat-messages" id="chatMessages" aria-live="polite">
+              <div class="chat-message assistant">Ask me which class looks hardest, whether to change the schedule, or how to study for this load.</div>
+            </div>
+            <form class="chat-form" id="chatForm">
+              <input id="chatInput" type="text" placeholder="Ask about this schedule..." autocomplete="off" aria-label="Ask about your schedule">
+              <button class="primary-button" type="submit">Ask</button>
+            </form>
+          </section>
+
+          <section class="premium-card degree-map-card" aria-label="4-year degree mapper">
+            <div class="lock-badge" aria-hidden="true">READY</div>
+            <p class="eyebrow">Degree Mapper</p>
+            <h2>4-Year Degree Mapper</h2>
+            <p>Upload a degree map PDF or text file to build an efficient graduation path across prerequisites, credit pacing, and lighter elective windows.</p>
+            <input class="sr-only" id="degreeMapUpload" type="file" accept=".pdf,.txt,.text,.doc,.docx,application/pdf,text/plain">
+            <button class="primary-button full-width" id="degreeMapButton" type="button">Upload Degree Map</button>
+            <p class="degree-map-status" id="degreeMapStatus" aria-live="polite">No degree map uploaded yet.</p>
+            <div class="degree-plan-summary" id="degreePlanSummary" hidden></div>
+            <div class="degree-plan-grid" id="degreePlanGrid"></div>
+          </section>
+        </aside>
+      </main>
+    </div>
+
+    <template id="semesterTemplate">
+      <article class="semester-block">
+        <div class="semester-head">
+          <label class="semester-title-field">
+            <span>Semester</span>
+            <input class="semester-title-input" type="text">
+          </label>
+          <div class="semester-summary">
+            <span class="credit-total">0 credits</span>
+            <span class="course-total">0 courses</span>
+          </div>
+        </div>
+
+        <div class="class-table" role="group" aria-label="Class entries">
+          <div class="class-row header-row" aria-hidden="true">
+            <span>Class Code / Name</span>
+            <span>Credits</span>
+            <span>Professor</span>
+            <span></span>
+          </div>
+          <div class="class-list"></div>
+        </div>
+
+        <div class="semester-actions">
+          <button class="primary-button add-class" type="button">
+            <span aria-hidden="true">+</span>
+            Add Class
+          </button>
+          <button class="secondary-button add-next" type="button">Plan Next Semester</button>
+        </div>
+      </article>
+    </template>
+
+    <template id="classRowTemplate">
+      <div class="class-row">
+        <label class="sr-only">Class code or name</label>
+        <input class="class-name" type="text" placeholder="CS 265" aria-label="Class code or name" list="courseSuggestions" autocomplete="off">
+
+        <label class="sr-only">Credit hours</label>
+        <select class="class-credits" aria-label="Credit hours">
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="4">4</option>
+        </select>
+
+        <label class="sr-only">Professor</label>
+        <input class="class-professor" type="text" placeholder="Ziping Liu" aria-label="Professor" list="professorSuggestions" autocomplete="off">
+
+        <button class="icon-button remove-class" type="button" aria-label="Remove class" title="Remove class">
+          <span aria-hidden="true">x</span>
+        </button>
+
+        <div class="lookup-detail" aria-live="polite"></div>
+      </div>
+    </template>
+
+    <datalist id="courseSuggestions"></datalist>
+    <datalist id="professorSuggestions"></datalist>
+
+    <script src="app.js"></script>
+  </body>
+</html>

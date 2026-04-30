@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: degreewise
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python server.py

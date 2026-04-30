@@ -1,0 +1,1921 @@
+const defaultUniversity = "Southeast Missouri State University";
+
+const demoSemesters = [
+  {
+    title: "Summer 2026",
+    courses: [
+      {
+        name: "PY 101 - Introduction to Psychology",
+        credits: 3,
+        professor: "Emilie Kay Beltzer",
+        courseInfo: demoCourseInfo("PY 101", "Introduction to Psychology", "01", "10077", "Dr Emilie Kay Beltzer")
+      },
+      {
+        name: "RS 202 - Old Testament Literature",
+        credits: 3,
+        professor: "Bruce W Gentry",
+        courseInfo: demoCourseInfo("RS 202", "Old Testament Literature", "01", "10092", "Dr Bruce W Gentry")
+      },
+      {
+        name: "CY 310 - Info Security & Assurance",
+        credits: 3,
+        professor: "Xiaoming Liu",
+        courseInfo: demoCourseInfo("CY 310", "Info Security & Assurance", "BX1", "10912", "Dr Xiaoming Liu")
+      },
+      {
+        name: "CS 380 - Com Operating System",
+        credits: 3,
+        professor: "Junaid Shuja",
+        courseInfo: demoCourseInfo("CS 380", "Com Operating System", "BX1", "11153", "Dr Junaid Shuja")
+      },
+      {
+        name: "CY 320 - Access Control",
+        credits: 3,
+        professor: "Zhouzhou Li",
+        courseInfo: demoCourseInfo("CY 320", "Access Control", "BX1", "11157", "Dr Zhouzhou Li")
+      }
+    ]
+  }
+];
+
+const state = {
+  semesters: cloneDemoSemesters(),
+  selectedSemester: 0,
+  apiOnline: false,
+  aiAnalysis: null,
+  aiDisabled: false,
+  aiPendingSignature: "",
+  chatHistory: [],
+  degreePlan: null,
+  degreePlanUploading: false
+};
+
+const semesterContainer = document.querySelector("#semesters");
+const semesterTemplate = document.querySelector("#semesterTemplate");
+const classRowTemplate = document.querySelector("#classRowTemplate");
+const riskGauge = document.querySelector("#riskGauge");
+const riskGaugeText = document.querySelector("#riskGaugeText");
+const riskScore = document.querySelector("#riskScore");
+const riskLabel = document.querySelector("#riskLabel");
+const suggestionList = document.querySelector("#suggestionList");
+const briefScoreGrid = document.querySelector("#briefScoreGrid");
+const scheduleComment = document.querySelector("#scheduleComment");
+const detailBreakdown = document.querySelector("#detailBreakdown");
+const chatMessages = document.querySelector("#chatMessages");
+const chatForm = document.querySelector("#chatForm");
+const chatInput = document.querySelector("#chatInput");
+const themeToggle = document.querySelector("#themeToggle");
+const resetDemo = document.querySelector("#resetDemo");
+const universityInput = document.querySelector("#university");
+const apiStatus = document.querySelector("#apiStatus");
+const aiStatus = document.querySelector("#aiStatus");
+const courseSuggestions = document.querySelector("#courseSuggestions");
+const professorSuggestions = document.querySelector("#professorSuggestions");
+const degreeMapUpload = document.querySelector("#degreeMapUpload");
+const degreeMapButton = document.querySelector("#degreeMapButton");
+const degreeMapStatus = document.querySelector("#degreeMapStatus");
+const degreePlanSummary = document.querySelector("#degreePlanSummary");
+const degreePlanGrid = document.querySelector("#degreePlanGrid");
+
+const courseSearchTimers = new WeakMap();
+const professorLookupTimers = new WeakMap();
+let aiAnalysisTimer = null;
+
+const savedTheme = localStorage.getItem("degreewise-theme");
+if (savedTheme) {
+  document.documentElement.dataset.theme = savedTheme;
+} else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
+  document.documentElement.dataset.theme = "dark";
+}
+
+themeToggle.addEventListener("click", () => {
+  const current = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  document.documentElement.dataset.theme = current;
+  localStorage.setItem("degreewise-theme", current);
+});
+
+resetDemo.addEventListener("click", () => {
+  universityInput.value = defaultUniversity;
+  state.semesters = cloneDemoSemesters();
+  state.selectedSemester = 0;
+  state.aiAnalysis = null;
+  state.aiDisabled = false;
+  state.aiPendingSignature = "";
+  state.chatHistory = [];
+  resetChatMessages();
+  setAiStatus("AI checking", "pending");
+  render();
+});
+
+universityInput.addEventListener("change", () => {
+  clearRemoteSignals();
+  state.aiAnalysis = null;
+  state.aiDisabled = false;
+  state.aiPendingSignature = "";
+  state.chatHistory = [];
+  resetChatMessages();
+  setAiStatus("AI checking", "pending");
+  render();
+});
+
+degreeMapButton.addEventListener("click", () => {
+  degreeMapUpload.click();
+});
+
+degreeMapUpload.addEventListener("change", async (event) => {
+  const file = event.target.files?.[0];
+  if (!file) {
+    return;
+  }
+
+  await uploadDegreeMap(file);
+  degreeMapUpload.value = "";
+});
+
+chatForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const question = chatInput.value.trim();
+  if (!question) {
+    return;
+  }
+  appendChatMessage("user", question);
+  chatInput.value = "";
+  const pending = appendChatMessage("assistant", "Thinking...");
+  let answer = "";
+
+  try {
+    answer = await generateAiScheduleAnswer(question) || generateScheduleAnswer(question);
+  } catch (error) {
+    reportGeminiFallback("chat", error.message);
+    answer = generateScheduleAnswer(question);
+  }
+
+  pending.textContent = answer;
+  rememberChatExchange(question, answer);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+});
+
+async function checkApiHealth() {
+  try {
+    const health = await fetchJson("/api/health");
+    state.apiOnline = true;
+    setApiStatus("API online", "online");
+    setAiStatus(health.providers?.ai === "Gemini REST API" ? "Gemini ready" : "Local AI", health.providers?.ai === "Gemini REST API" ? "online" : "local");
+  } catch (error) {
+    state.apiOnline = false;
+    setApiStatus("Offline demo", "offline");
+    setAiStatus("Local AI", "local");
+  }
+}
+
+function render() {
+  semesterContainer.replaceChildren();
+
+  state.semesters.forEach((semester, semesterIndex) => {
+    const block = semesterTemplate.content.firstElementChild.cloneNode(true);
+    const titleInput = block.querySelector(".semester-title-input");
+    const classList = block.querySelector(".class-list");
+    const creditTotal = block.querySelector(".credit-total");
+    const courseTotal = block.querySelector(".course-total");
+    const addClassButton = block.querySelector(".add-class");
+    const addNextButton = block.querySelector(".add-next");
+
+    titleInput.value = semester.title;
+    titleInput.addEventListener("input", (event) => {
+      semester.title = event.target.value;
+      updateAnalytics();
+    });
+
+    semester.courses.forEach((course, courseIndex) => {
+      const row = classRowTemplate.content.firstElementChild.cloneNode(true);
+      const nameInput = row.querySelector(".class-name");
+      const creditSelect = row.querySelector(".class-credits");
+      const professorInput = row.querySelector(".class-professor");
+      const removeButton = row.querySelector(".remove-class");
+
+      nameInput.value = course.name;
+      creditSelect.value = String(course.credits || 3);
+      professorInput.value = course.professor;
+      syncLookupDetail(row, course);
+
+      nameInput.addEventListener("input", (event) => {
+        course.name = event.target.value;
+        course.courseStatus = course.name.trim().length > 1 ? "searching" : "";
+        course.courseInfo = null;
+        syncLookupDetail(row, course);
+        scheduleCourseSearch(course);
+        updateAnalytics();
+      });
+
+      nameInput.addEventListener("change", () => {
+        lookupCourse(course, row, creditSelect, nameInput);
+      });
+
+      nameInput.addEventListener("blur", () => {
+        lookupCourse(course, row, creditSelect, nameInput);
+      });
+
+      creditSelect.addEventListener("change", (event) => {
+        course.credits = Number(event.target.value);
+        updateAnalytics();
+        updateSemesterSummary(block, semester);
+      });
+
+      professorInput.addEventListener("input", (event) => {
+        course.professor = event.target.value;
+        course.professorSignal = null;
+        course.professorStatus = course.professor.trim().length > 1 ? "searching" : "";
+        syncLookupDetail(row, course);
+        scheduleProfessorLookup(course, row);
+        updateAnalytics();
+      });
+
+      professorInput.addEventListener("change", () => {
+        lookupProfessor(course, row);
+      });
+
+      professorInput.addEventListener("blur", () => {
+        lookupProfessor(course, row);
+      });
+
+      removeButton.addEventListener("click", () => {
+        semester.courses.splice(courseIndex, 1);
+        render();
+      });
+
+      classList.append(row);
+    });
+
+    addClassButton.addEventListener("click", () => {
+      semester.courses.push({ name: "", credits: 3, professor: "" });
+      state.selectedSemester = semesterIndex;
+      render();
+      focusLastCourse(semesterIndex);
+    });
+
+    addNextButton.addEventListener("click", () => {
+      addNextSemester(semesterIndex);
+    });
+
+    updateSemesterSummary(block, semester);
+
+    block.addEventListener("focusin", () => {
+      state.selectedSemester = semesterIndex;
+      updateAnalytics();
+    });
+
+    semesterContainer.append(block);
+  });
+
+  updateAnalytics();
+  renderDegreePlan();
+  requestAnimationFrame(hydrateVisibleRows);
+}
+
+function updateSemesterSummary(block, semester) {
+  const creditTotal = block.querySelector(".credit-total");
+  const courseTotal = block.querySelector(".course-total");
+  const totalCredits = semester.courses.reduce((sum, course) => sum + Number(course.credits || 0), 0);
+  creditTotal.textContent = `${totalCredits} credits`;
+  courseTotal.textContent = `${semester.courses.length} courses`;
+}
+
+function addNextSemester(afterIndex) {
+  const nextTitle = nextSemesterTitle(state.semesters[afterIndex]?.title || "Summer 2026");
+  state.semesters.splice(afterIndex + 1, 0, {
+    title: nextTitle,
+    courses: [
+      { name: "", credits: 3, professor: "" }
+    ]
+  });
+  state.selectedSemester = afterIndex + 1;
+  render();
+  focusLastCourse(state.selectedSemester);
+}
+
+function focusLastCourse(semesterIndex) {
+  requestAnimationFrame(() => {
+    const semesterBlocks = semesterContainer.querySelectorAll(".semester-block");
+    const targetBlock = semesterBlocks[semesterIndex];
+    const inputs = targetBlock?.querySelectorAll(".class-name");
+    inputs?.[inputs.length - 1]?.focus();
+  });
+}
+
+function hydrateVisibleRows() {
+  const blocks = semesterContainer.querySelectorAll(".semester-block");
+
+  state.semesters.forEach((semester, semesterIndex) => {
+    const rows = blocks[semesterIndex]?.querySelectorAll(".class-list .class-row") || [];
+    semester.courses.forEach((course, courseIndex) => {
+      const row = rows[courseIndex];
+      if (!row) {
+        return;
+      }
+
+      const nameInput = row.querySelector(".class-name");
+      const creditSelect = row.querySelector(".class-credits");
+      if (course.name.trim() && !course.courseInfo) {
+        lookupCourse(course, row, creditSelect, nameInput, { quiet: true });
+      }
+
+      if (course.professor.trim() && !course.professorSignal) {
+        lookupProfessor(course, row, { quiet: true });
+      }
+    });
+  });
+}
+
+function scheduleCourseSearch(course) {
+  clearTimeout(courseSearchTimers.get(course));
+  const term = course.name.trim();
+  if (term.length < 2) {
+    courseSuggestions.replaceChildren();
+    return;
+  }
+
+  const timer = setTimeout(async () => {
+    try {
+      const data = await fetchJson("/api/courses/search", {
+        q: term,
+        university: currentUniversity()
+      });
+      course.courseAlternatives = data.results || [];
+      setCourseSuggestions(data.results || []);
+    } catch (error) {
+      course.courseAlternatives = [];
+    }
+  }, 260);
+
+  courseSearchTimers.set(course, timer);
+}
+
+function scheduleProfessorLookup(course, row) {
+  clearTimeout(professorLookupTimers.get(course));
+  const name = course.professor.trim();
+  if (name.length < 2) {
+    return;
+  }
+
+  const timer = setTimeout(() => {
+    lookupProfessor(course, row, { quiet: true });
+  }, 520);
+
+  professorLookupTimers.set(course, timer);
+}
+
+async function lookupCourse(course, row, creditSelect, nameInput, options = {}) {
+  const query = course.name.trim();
+  if (query.length < 2) {
+    course.courseStatus = "";
+    syncLookupDetail(row, course);
+    return;
+  }
+
+  const scopedQuery = `${currentUniversity()}::${query}`;
+  if (course.lastCourseLookupQuery === scopedQuery && course.courseInfo) {
+    course.courseStatus = "";
+    syncLookupDetail(row, course);
+    return;
+  }
+
+  course.lastCourseLookupQuery = scopedQuery;
+  course.courseStatus = options.quiet ? course.courseStatus : "loading";
+  syncLookupDetail(row, course);
+
+  try {
+    const data = await fetchJson("/api/courses/lookup", {
+      code: query,
+      university: currentUniversity()
+    });
+
+    if (course.name.trim() !== query) {
+      return;
+    }
+
+    if (data.course) {
+      course.courseInfo = data.course;
+      course.courseAlternatives = (data.results || []).filter((item) => item.code !== data.course.code);
+      course.courseProvider = data.provider;
+      course.courseFallback = Boolean(data.fallback);
+      course.courseStatus = "";
+
+      const credits = clampCredits(data.course.credits);
+      if (credits) {
+        course.credits = credits;
+        creditSelect.value = String(credits);
+      }
+
+      if (shouldAdoptCourseName(query, data.course)) {
+        course.name = data.course.name;
+        nameInput.value = data.course.name;
+      }
+    } else {
+      course.courseStatus = "not-found";
+    }
+
+    updateAnalytics();
+  } catch (error) {
+    course.courseStatus = "error";
+  }
+
+  syncLookupDetail(row, course);
+}
+
+async function lookupProfessor(course, row, options = {}) {
+  const name = course.professor.trim();
+  if (name.length < 2) {
+    course.professorStatus = "";
+    course.professorSignal = null;
+    syncLookupDetail(row, course);
+    updateAnalytics();
+    return;
+  }
+
+  const scopedQuery = `${currentUniversity()}::${name}`;
+  if (course.lastProfessorLookupQuery === scopedQuery && course.professorSignal) {
+    course.professorStatus = "";
+    syncLookupDetail(row, course);
+    return;
+  }
+
+  course.lastProfessorLookupQuery = scopedQuery;
+  course.professorStatus = options.quiet ? course.professorStatus : "loading";
+  syncLookupDetail(row, course);
+
+  try {
+    const data = await fetchJson("/api/professors/search", {
+      name,
+      university: currentUniversity()
+    });
+
+    if (course.professor.trim() !== name) {
+      return;
+    }
+
+    if (data.result) {
+      course.professorSignal = normalizeProfessorSignal(data.result, data.provider, data.fallback);
+      course.professorStatus = "";
+      setProfessorSuggestions(data.results || []);
+    } else {
+      course.professorStatus = "not-found";
+    }
+
+    updateAnalytics();
+  } catch (error) {
+    course.professorStatus = "error";
+    course.professorSignal = pendingProfessorSignal(name, "Lookup unavailable");
+    updateAnalytics();
+  }
+
+  syncLookupDetail(row, course);
+}
+
+function updateAnalytics() {
+  const semester = state.semesters[state.selectedSemester] || state.semesters[0];
+  const localRisk = calculateRisk(semester);
+  const breakdown = buildSemesterBreakdown(semester, localRisk);
+  const aiAnalysis = currentAiAnalysis(semester);
+  const risk = aiAnalysis
+    ? {
+        ...localRisk,
+        score: aiAnalysis.burnoutScore,
+        label: aiAnalysis.burnoutLabel || localRisk.label
+      }
+    : localRisk;
+  const color = risk.score >= 72
+    ? "var(--danger)"
+    : risk.score >= 48
+      ? "var(--warning)"
+      : "var(--accent)";
+
+  riskGauge.style.setProperty("--risk", `${risk.score}%`);
+  riskGauge.style.setProperty("--risk-color", color);
+  riskGaugeText.textContent = risk.score;
+  riskScore.textContent = `${risk.score}%`;
+  riskLabel.textContent = risk.label;
+  riskScore.style.color = color;
+
+  renderBriefBreakdown(breakdown, risk, aiAnalysis);
+  renderDetailedBreakdown(breakdown, risk);
+  renderSuggestions(semester, risk, breakdown, aiAnalysis);
+  scheduleGeminiAnalysis(semester);
+}
+
+function scheduleGeminiAnalysis(semester) {
+  const signature = scheduleSignature(semester);
+  const hasCourses = (semester?.courses || []).some((course) => course.name.trim());
+
+  if (!hasCourses || state.aiDisabled || state.aiAnalysis?.signature === signature || state.aiPendingSignature === signature) {
+    return;
+  }
+
+  clearTimeout(aiAnalysisTimer);
+  aiAnalysisTimer = setTimeout(async () => {
+    const currentSemester = state.semesters[state.selectedSemester] || state.semesters[0];
+    const currentSignature = scheduleSignature(currentSemester);
+
+    if (!currentSignature || state.aiAnalysis?.signature === currentSignature) {
+      return;
+    }
+
+    state.aiPendingSignature = currentSignature;
+    setAiStatus("Testing Gemini", "pending");
+
+    try {
+      const localRisk = calculateRisk(currentSemester);
+      const breakdown = buildSemesterBreakdown(currentSemester, localRisk);
+      const data = await postJson("/api/ai/analyze", buildAiSchedulePayload(currentSemester, localRisk, breakdown));
+
+      if (state.aiPendingSignature !== currentSignature) {
+        return;
+      }
+
+      if (data.enabled === false) {
+        state.aiDisabled = data.retryable !== true;
+        reportGeminiFallback("analysis", data.reason);
+        return;
+      }
+
+      state.aiAnalysis = normalizeAiAnalysis(data, currentSignature);
+      setAiStatus("Using Gemini", "online");
+      updateAnalytics();
+    } catch (error) {
+      state.aiDisabled = true;
+      reportGeminiFallback("analysis", error.message);
+    } finally {
+      if (state.aiPendingSignature === currentSignature) {
+        state.aiPendingSignature = "";
+      }
+    }
+  }, 700);
+}
+
+function currentAiAnalysis(semester) {
+  const signature = scheduleSignature(semester);
+  return state.aiAnalysis?.signature === signature ? state.aiAnalysis : null;
+}
+
+function normalizeAiAnalysis(data, signature) {
+  const score = Math.max(0, Math.min(100, Math.round(Number(data.burnoutScore))));
+  return {
+    signature,
+    burnoutScore: Number.isFinite(score) ? score : 50,
+    burnoutLabel: data.burnoutLabel || "",
+    briefSummary: data.briefSummary || "",
+    recommendations: Array.isArray(data.recommendations) ? data.recommendations.filter(Boolean) : []
+  };
+}
+
+function calculateRisk(semester) {
+  const courses = semester?.courses || [];
+  const totalCredits = courses.reduce((sum, course) => sum + Number(course.credits || 0), 0);
+  const courseCount = courses.filter((course) => course.name.trim()).length;
+  const difficultyAverage = professorDifficultyAverage(courses);
+  const fourCreditCourses = courses.filter((course) => Number(course.credits) >= 4).length;
+  const workloadBump = courses.reduce((sum, course) => {
+    const hours = Number(course.courseInfo?.workloadHours || 0);
+    return sum + Math.max(0, hours - 10) * 0.8;
+  }, 0);
+
+  let score = 18;
+  score += Math.max(0, totalCredits - 9) * 6;
+  score += Math.max(0, courseCount - 4) * 7;
+  score += difficultyAverage * 8;
+  score += fourCreditCourses * 5;
+  score += workloadBump;
+
+  const bounded = Math.max(8, Math.min(96, Math.round(score)));
+  const label = bounded >= 72 ? "High Load" : bounded >= 48 ? "Needs Review" : "Balanced";
+
+  return { score: bounded, label, totalCredits, difficultyAverage };
+}
+
+function professorDifficultyAverage(courses) {
+  const difficulties = courses
+    .filter((course) => course.professor.trim())
+    .map((course) => Number(course.professorSignal?.difficulty || 2.5))
+    .filter(Boolean);
+
+  if (!difficulties.length) {
+    return 2.5;
+  }
+
+  return difficulties.reduce((sum, value) => sum + value, 0) / difficulties.length;
+}
+
+function buildSemesterBreakdown(semester, risk) {
+  const courses = (semester?.courses || []).filter((course) => course.name.trim());
+  const classDetails = courses.map((course) => buildClassBreakdown(course));
+  const factorNames = ["writing", "reading", "labsProjects", "subject", "professor", "pace"];
+  const totals = {};
+
+  factorNames.forEach((factor) => {
+    totals[factor] = Math.round(average(classDetails.map((item) => item.scores[factor])));
+  });
+
+  totals.creditLoad = creditLoadScore(risk.totalCredits, courses.length);
+
+  return {
+    classes: classDetails,
+    scores: totals,
+    summary: summarizeSchedule(totals, risk, classDetails)
+  };
+}
+
+function buildClassBreakdown(course) {
+  const info = course.courseInfo || {};
+  const code = extractDisplayedCourseCode(course.name || info.code || "");
+  const subjectCode = code.split(" ")[0] || "";
+  const number = Number((code.match(/\d+/) || [0])[0]);
+  const credits = Number(course.credits || info.credits || 3);
+  const text = `${course.name} ${info.title || ""} ${info.description || ""} ${info.prerequisites || ""}`.toLowerCase();
+  const professorDifficulty = Number(course.professorSignal?.difficulty || 2.5);
+
+  let writing = 2 + keywordScore(text, ["writing", "composition", "seminar", "essay", "report", "presentation", "communication", "literature"]);
+  let reading = 2 + keywordScore(text, ["reading", "history", "theory", "policy", "psychology", "sociology", "research", "literature", "ethics"]);
+  let labsProjects = 2 + keywordScore(text, ["lab", "programming", "software", "project", "systems", "data", "cyber", "network", "database", "mobile", "robotics"]);
+  let subject = 3 + keywordScore(text, ["algorithms", "calculus", "discrete", "assembly", "operating system", "machine learning", "chemistry", "physics", "security"]);
+  let pace = 3;
+
+  if (["EN", "MC", "SC", "SO", "SW", "PS", "UI", "WH"].includes(subjectCode)) {
+    writing += 2;
+    reading += 2;
+  }
+
+  if (["CS", "CY", "BY", "CH", "PH", "GO", "MA"].includes(subjectCode)) {
+    labsProjects += subjectCode === "MA" ? 1 : 2;
+    subject += 1;
+  }
+
+  if (number >= 300) {
+    subject += 2;
+    pace += 1;
+  } else if (number >= 200) {
+    subject += 1;
+  }
+
+  if (number >= 500) {
+    subject += 2;
+    pace += 1;
+  }
+
+  if (credits >= 4) {
+    writing += 1;
+    reading += 1;
+    labsProjects += 1;
+    pace += 2;
+  } else if (credits <= 2) {
+    pace -= 1;
+  }
+
+  const professor = clampScore(Math.round(professorDifficulty * 2));
+  subject += Math.max(0, professorDifficulty - 2.5);
+
+  const scores = {
+    writing: clampScore(Math.round(writing)),
+    reading: clampScore(Math.round(reading)),
+    labsProjects: clampScore(Math.round(labsProjects)),
+    subject: clampScore(Math.round(subject)),
+    professor,
+    pace: clampScore(Math.round(pace + credits / 2))
+  };
+
+  const classScore = clampScore(Math.round(
+    scores.writing * 0.12
+    + scores.reading * 0.14
+    + scores.labsProjects * 0.2
+    + scores.subject * 0.25
+    + scores.professor * 0.14
+    + scores.pace * 0.15
+  ));
+
+  return {
+    course,
+    code,
+    title: course.courseInfo?.title || course.name.replace(/^[A-Z]{2,4}\s+\d{3}[A-Z]?\s+-\s+/, "") || "Course pending",
+    credits,
+    classScore,
+    burnoutPoints: Math.round(classScore * credits * 1.25),
+    scores,
+    note: classNote(scores, course, classScore)
+  };
+}
+
+function renderBriefBreakdown(breakdown, risk, aiAnalysis) {
+  briefScoreGrid.replaceChildren();
+
+  const items = [
+    ["Writing", breakdown.scores.writing],
+    ["Reading", breakdown.scores.reading],
+    ["Labs/Projects", breakdown.scores.labsProjects],
+    ["Subject Difficulty", breakdown.scores.subject],
+    ["Professor Difficulty", breakdown.scores.professor],
+    ["Credit Load", breakdown.scores.creditLoad]
+  ];
+
+  items.forEach(([label, score]) => {
+    const card = document.createElement("div");
+    card.className = "brief-score";
+    card.innerHTML = `
+      <div class="brief-score-top">
+        <span class="brief-score-label"></span>
+        <span class="brief-score-value"></span>
+      </div>
+      <div class="mini-meter"><span></span></div>
+    `;
+    card.querySelector(".brief-score-label").textContent = label;
+    card.querySelector(".brief-score-value").textContent = `${score}/10`;
+    card.querySelector(".mini-meter").style.setProperty("--score", score);
+    card.querySelector(".mini-meter").style.setProperty("--meter-color", scoreColor(score));
+    briefScoreGrid.append(card);
+  });
+
+  const summary = aiAnalysis?.briefSummary || breakdown.summary;
+  scheduleComment.textContent = `${summary} Burnout risk is ${risk.score}%, so treat this as a ${risk.label.toLowerCase()} semester.`;
+}
+
+function renderDetailedBreakdown(breakdown, risk) {
+  detailBreakdown.replaceChildren();
+
+  const summary = document.createElement("article");
+  summary.className = "detail-item detail-summary-item";
+  summary.innerHTML = `
+    <div class="detail-item-head">
+      <div>
+        <div class="detail-title">Semester burnout score</div>
+        <div class="detail-subtitle"></div>
+      </div>
+      <div class="detail-score"></div>
+    </div>
+    <p class="detail-note"></p>
+  `;
+  summary.querySelector(".detail-subtitle").textContent = `${breakdown.classes.length} classes, ${breakdown.classes.reduce((sum, item) => sum + item.credits, 0)} credits`;
+  summary.querySelector(".detail-score").textContent = `${risk.score}%`;
+  summary.querySelector(".detail-note").textContent = burnoutScoreExplanation(risk, breakdown);
+  detailBreakdown.append(summary);
+
+  if (!breakdown.classes.length) {
+    detailBreakdown.append(emptyState("Add classes to see a class-by-class difficulty breakdown."));
+    return;
+  }
+
+  breakdown.classes.forEach((item) => {
+    const article = document.createElement("article");
+    article.className = "detail-item detail-class-card";
+    const signal = item.course.professorSignal || pendingProfessorSignal(item.course.professor || "Professor pending", item.course.professorStatus);
+
+    const head = document.createElement("div");
+    head.className = "detail-item-head";
+
+    const textWrap = document.createElement("div");
+    const title = document.createElement("div");
+    title.className = "detail-title";
+    title.textContent = item.course.name || `${item.code} - ${item.title}`;
+
+    const instructor = document.createElement("div");
+    instructor.className = "detail-instructor";
+    const instructorName = item.course.professor || item.course.professorSignal?.name || "Not entered";
+    instructor.append("Instructor: ");
+    if (instructorName !== "Not entered") {
+      const link = document.createElement("a");
+      link.href = professorProfileUrl(signal, instructorName);
+      link.target = "_blank";
+      link.rel = "noreferrer";
+      link.textContent = instructorName;
+      instructor.append(link);
+    } else {
+      instructor.append(instructorName);
+    }
+
+    const subtitle = document.createElement("div");
+    subtitle.className = "detail-subtitle";
+    subtitle.textContent = `${item.credits} credits | ${item.burnoutPoints} burnout pts`;
+    textWrap.append(title, instructor, subtitle);
+
+    head.append(textWrap);
+
+    const compactStats = document.createElement("div");
+    compactStats.className = "detail-compact-stats";
+    [
+      ["Class rating", `${item.classScore}/10`],
+      ["Professor rating", signal.rating > 0 ? `${signal.rating.toFixed(1)}/5` : "Pending"]
+    ].forEach(([label, value]) => {
+      const stat = document.createElement("div");
+      stat.className = "compact-stat";
+      stat.innerHTML = `<span></span><strong></strong>`;
+      stat.querySelector("span").textContent = label;
+      stat.querySelector("strong").textContent = value;
+      compactStats.append(stat);
+    });
+
+    const factors = document.createElement("div");
+    factors.className = "factor-grid";
+    [
+      ["Writing", item.scores.writing],
+      ["Reading", item.scores.reading],
+      ["Labs/Projects", item.scores.labsProjects],
+      ["Subject", item.scores.subject],
+      ["Professor", item.scores.professor],
+      ["Pace", item.scores.pace]
+    ].forEach(([label, value]) => {
+      const chip = document.createElement("div");
+      chip.className = "factor-chip";
+      chip.textContent = `${label}: ${value}/10`;
+      factors.append(chip);
+    });
+
+    const professorMetrics = document.createElement("div");
+    professorMetrics.className = "detail-professor-metrics";
+    [
+      ["Rating", signal.rating > 0 ? `${signal.rating.toFixed(1)}/5` : "Pending"],
+      ["Difficulty", signal.difficulty ? `${signal.difficulty.toFixed(1)}/5` : "Pending"],
+      ["Take Again", Number(signal.wouldTakeAgain) > 0 ? `${Math.round(signal.wouldTakeAgain)}%` : "Pending"]
+    ].forEach(([label, value]) => {
+      const metric = document.createElement("div");
+      metric.className = "detail-professor-metric";
+      metric.innerHTML = `<span></span><strong></strong>`;
+      metric.querySelector("span").textContent = label;
+      metric.querySelector("strong").textContent = value;
+      professorMetrics.append(metric);
+    });
+
+    const tags = document.createElement("div");
+    tags.className = "tag-row detail-tags";
+    signal.tags.slice(0, 3).forEach((tag) => {
+      const chip = document.createElement("span");
+      chip.textContent = tag;
+      tags.append(chip);
+    });
+
+    const note = document.createElement("p");
+    note.className = "detail-note";
+    note.textContent = item.note;
+
+    const details = document.createElement("details");
+    details.className = "detail-more";
+    const moreToggle = document.createElement("summary");
+    moreToggle.textContent = "Expand metrics";
+    details.append(moreToggle, factors, professorMetrics, tags, note);
+
+    article.append(head, compactStats, details);
+    detailBreakdown.append(article);
+  });
+}
+
+async function uploadDegreeMap(file) {
+  if (file.size > 8 * 1024 * 1024) {
+    setDegreeMapStatus("Please upload a degree map under 8 MB.", "error");
+    return;
+  }
+
+  state.degreePlanUploading = true;
+  degreeMapButton.disabled = true;
+  degreeMapButton.textContent = "Analyzing...";
+  setDegreeMapStatus(`Analyzing ${file.name}...`, "pending");
+
+  const formData = new FormData();
+  formData.append("degreeMap", file);
+  formData.append("university", currentUniversity());
+  formData.append("major", document.querySelector("#major")?.value?.trim() || "");
+  formData.append("creditsCompleted", document.querySelector("#creditsCompleted")?.value || "0");
+
+  try {
+    const data = await postForm("/api/degree-map/analyze", formData);
+    const plan = normalizeDegreePlan(data.plan || data);
+    state.degreePlan = {
+      ...plan,
+      source: data.source || plan.source || "local",
+      model: data.model || "",
+      fallback: Boolean(data.fallback),
+      providerError: data.providerError || ""
+    };
+
+    const source = state.degreePlan.source === "gemini" ? "Gemini" : "local planner";
+    setDegreeMapStatus(`Built an 8-semester plan with ${source}.`, state.degreePlan.fallback ? "local" : "online");
+    renderDegreePlan();
+    appendChatMessage("assistant", "I mapped the 4-year plan. Ask me about prerequisites, lighter semesters, gen ed placement, or when to take a specific course.");
+  } catch (error) {
+    setDegreeMapStatus(`Degree map upload failed: ${error.message}`, "error");
+  } finally {
+    state.degreePlanUploading = false;
+    degreeMapButton.disabled = false;
+    degreeMapButton.textContent = state.degreePlan ? "Upload New Degree Map" : "Upload Degree Map";
+  }
+}
+
+function renderDegreePlan() {
+  if (!degreePlanSummary || !degreePlanGrid) {
+    return;
+  }
+
+  degreePlanGrid.replaceChildren();
+
+  if (!state.degreePlan) {
+    degreePlanSummary.hidden = true;
+    return;
+  }
+
+  const plan = state.degreePlan;
+  degreePlanSummary.hidden = false;
+  degreePlanSummary.replaceChildren();
+
+  const title = document.createElement("strong");
+  title.textContent = plan.programName || "Degree plan";
+
+  const meta = document.createElement("span");
+  const totalCredits = plan.totalCredits ? `${plan.totalCredits} credits` : "credits pending";
+  meta.textContent = `${totalCredits} across ${plan.semesters.length} semesters`;
+
+  const strategy = document.createElement("p");
+  strategy.textContent = plan.strategy || "Balanced pacing with prerequisites kept ahead of upper-level courses.";
+
+  degreePlanSummary.append(title, meta, strategy);
+
+  plan.semesters.forEach((semester, semesterIndex) => {
+    const card = document.createElement("article");
+    card.className = "degree-semester-card";
+
+    const head = document.createElement("div");
+    head.className = "degree-semester-head";
+
+    const headingWrap = document.createElement("div");
+    const label = document.createElement("span");
+    label.className = "degree-term-label";
+    label.textContent = `Year ${semester.year || Math.floor(semesterIndex / 2) + 1}`;
+
+    const heading = document.createElement("h3");
+    heading.textContent = semester.term || semester.title || `Semester ${semesterIndex + 1}`;
+    headingWrap.append(label, heading);
+
+    const risk = document.createElement("span");
+    risk.className = "degree-risk";
+    risk.style.setProperty("--risk-color", scoreColor(Math.ceil((semester.burnoutScore || 40) / 10)));
+    risk.textContent = `${semester.burnoutScore || 40}%`;
+
+    head.append(headingWrap, risk);
+
+    const focus = document.createElement("p");
+    focus.className = "degree-focus";
+    focus.textContent = semester.focus || "Balanced course pacing";
+
+    const courses = document.createElement("ul");
+    courses.className = "degree-course-list";
+    semester.courses.forEach((course) => {
+      const item = document.createElement("li");
+      const code = document.createElement("strong");
+      code.textContent = course.code || "GEN";
+      const name = document.createElement("span");
+      name.textContent = `${course.title || course.name || "Course"} (${course.credits || 3} cr)`;
+      const tag = document.createElement("em");
+      tag.textContent = course.category || "Course";
+      item.append(code, name, tag);
+      courses.append(item);
+    });
+
+    const notes = document.createElement("p");
+    notes.className = "degree-note";
+    notes.textContent = semester.notes?.[0] || `${semester.credits || semesterCreditTotal(semester)} credits planned.`;
+
+    const genEdButton = document.createElement("button");
+    genEdButton.className = "secondary-button full-width";
+    genEdButton.type = "button";
+    genEdButton.textContent = semester.genEdLoading ? "Finding Gen Eds..." : "Recommend Gen Eds";
+    genEdButton.disabled = Boolean(semester.genEdLoading);
+    genEdButton.addEventListener("click", () => {
+      recommendGeneralEducation(semesterIndex);
+    });
+
+    const genEdList = document.createElement("div");
+    genEdList.className = "gened-list";
+    renderGenEdRecommendations(semester, genEdList);
+
+    card.append(head, focus, courses, notes, genEdButton, genEdList);
+    degreePlanGrid.append(card);
+  });
+}
+
+function renderGenEdRecommendations(semester, container) {
+  container.replaceChildren();
+
+  const recommendations = Array.isArray(semester.genEdRecommendations) ? semester.genEdRecommendations : [];
+  if (recommendations.length) {
+    recommendations.forEach((recommendation) => {
+      const item = document.createElement("div");
+      item.className = "gened-item";
+      const title = document.createElement("strong");
+      title.textContent = `${recommendation.code || "GEN"} - ${recommendation.title || "General education option"}`;
+      const detail = document.createElement("span");
+      detail.textContent = `${recommendation.area || "Gen Ed"}: ${recommendation.reason || "Good fit for this semester."}`;
+      item.append(title, detail);
+      container.append(item);
+    });
+    return;
+  }
+
+  if (semester.genEdSlots?.length) {
+    const slots = document.createElement("p");
+    slots.className = "gened-slots";
+    slots.textContent = `Open Gen Ed slots: ${semester.genEdSlots.map((slot) => slot.area || "General Education").slice(0, 3).join(", ")}`;
+    container.append(slots);
+  }
+}
+
+async function recommendGeneralEducation(semesterIndex) {
+  if (!state.degreePlan?.semesters?.[semesterIndex]) {
+    return;
+  }
+
+  const semester = state.degreePlan.semesters[semesterIndex];
+  semester.genEdLoading = true;
+  renderDegreePlan();
+
+  try {
+    const data = await postJson("/api/degree-map/gened", {
+      profile: {
+        university: currentUniversity(),
+        major: document.querySelector("#major")?.value?.trim() || "",
+        creditsCompleted: Number(document.querySelector("#creditsCompleted")?.value || 0)
+      },
+      degreePlan: degreePlanForAi(),
+      semesterIndex,
+      semester: compactDegreeSemester(semester)
+    });
+
+    semester.genEdRecommendations = Array.isArray(data.recommendations) ? data.recommendations : [];
+    semester.genEdNote = data.note || "";
+  } catch (error) {
+    semester.genEdRecommendations = [
+      {
+        code: "Advisor",
+        title: "General education review",
+        area: "Planning",
+        reason: "Recommendation lookup failed. Compare this slot with your official catalog or advisor."
+      }
+    ];
+  } finally {
+    semester.genEdLoading = false;
+    renderDegreePlan();
+  }
+}
+
+function normalizeDegreePlan(plan = {}) {
+  const semesters = Array.isArray(plan.semesters) ? plan.semesters : [];
+  const cleanSemesters = semesters.slice(0, 8).map((semester, index) => ({
+    year: Number(semester.year || Math.floor(index / 2) + 1),
+    term: semester.term || semester.title || `Semester ${index + 1}`,
+    title: semester.title || semester.term || `Semester ${index + 1}`,
+    credits: Number(semester.credits || semesterCreditTotal(semester)),
+    burnoutScore: Math.max(12, Math.min(88, Math.round(Number(semester.burnoutScore || 42)))),
+    focus: semester.focus || "",
+    courses: normalizeDegreeCourses(semester.courses),
+    genEdSlots: normalizeGenEdSlots(semester.genEdSlots),
+    genEdRecommendations: Array.isArray(semester.genEdRecommendations) ? semester.genEdRecommendations : [],
+    notes: Array.isArray(semester.notes) ? semester.notes.filter(Boolean).slice(0, 3) : []
+  }));
+
+  return {
+    programName: plan.programName || plan.program || "Degree plan",
+    documentTitle: plan.documentTitle || "",
+    totalCredits: Number(plan.totalCredits || cleanSemesters.reduce((sum, semester) => sum + Number(semester.credits || 0), 0)),
+    strategy: plan.strategy || "",
+    warnings: Array.isArray(plan.warnings) ? plan.warnings.filter(Boolean).slice(0, 6) : [],
+    semesters: cleanSemesters
+  };
+}
+
+function normalizeDegreeCourses(courses) {
+  if (!Array.isArray(courses)) {
+    return [];
+  }
+
+  return courses.slice(0, 8).map((course) => ({
+    code: String(course.code || "").trim(),
+    title: String(course.title || course.name || "").trim(),
+    name: String(course.name || course.title || "").trim(),
+    credits: Number(course.credits || 3),
+    category: String(course.category || "Course").trim(),
+    reason: String(course.reason || "").trim()
+  }));
+}
+
+function normalizeGenEdSlots(slots) {
+  if (!Array.isArray(slots)) {
+    return [];
+  }
+
+  return slots.slice(0, 4).map((slot) => ({
+    area: String(slot.area || "General Education").trim(),
+    credits: Number(slot.credits || 3),
+    recommendation: String(slot.recommendation || "").trim()
+  }));
+}
+
+function semesterCreditTotal(semester = {}) {
+  return (semester.courses || []).reduce((sum, course) => sum + Number(course.credits || 3), 0);
+}
+
+function degreePlanForAi() {
+  if (!state.degreePlan) {
+    return null;
+  }
+
+  return {
+    programName: state.degreePlan.programName,
+    totalCredits: state.degreePlan.totalCredits,
+    strategy: state.degreePlan.strategy,
+    warnings: state.degreePlan.warnings,
+    semesters: state.degreePlan.semesters.map(compactDegreeSemester)
+  };
+}
+
+function compactDegreeSemester(semester) {
+  return {
+    year: semester.year,
+    term: semester.term,
+    credits: semester.credits,
+    burnoutScore: semester.burnoutScore,
+    focus: semester.focus,
+    courses: (semester.courses || []).map((course) => ({
+      code: course.code,
+      title: course.title || course.name,
+      credits: course.credits,
+      category: course.category
+    })),
+    genEdSlots: semester.genEdSlots || [],
+    genEdRecommendations: semester.genEdRecommendations || [],
+    notes: semester.notes || []
+  };
+}
+
+function setDegreeMapStatus(text, mode = "local") {
+  degreeMapStatus.textContent = text;
+  degreeMapStatus.dataset.mode = mode;
+}
+
+function appendChatMessage(role, text) {
+  const message = document.createElement("div");
+  message.className = `chat-message ${role}`;
+  message.textContent = text;
+  chatMessages.append(message);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+  return message;
+}
+
+function resetChatMessages() {
+  chatMessages.replaceChildren();
+  const prompt = state.degreePlan
+    ? "Ask me about the current semester or the 4-year degree plan, including prerequisites, gen eds, burnout, and graduation timing."
+    : "Ask me which class looks hardest, whether to change the schedule, or how to study for this load.";
+  appendChatMessage("assistant", prompt);
+}
+
+async function generateAiScheduleAnswer(question) {
+  const semester = state.semesters[state.selectedSemester] || state.semesters[0];
+  const localRisk = calculateRisk(semester);
+  const breakdown = buildSemesterBreakdown(semester, localRisk);
+  const aiAnalysis = currentAiAnalysis(semester);
+  const risk = aiAnalysis
+    ? {
+        ...localRisk,
+        score: aiAnalysis.burnoutScore,
+        label: aiAnalysis.burnoutLabel || localRisk.label
+      }
+    : localRisk;
+  const data = await postJson("/api/ai/chat", {
+    ...buildAiSchedulePayload(semester, risk, breakdown),
+    conversation: recentChatHistory(),
+    question
+  });
+
+  if (data.enabled === false) {
+    reportGeminiFallback("chat", data.reason);
+    return "";
+  }
+
+  setAiStatus("Using Gemini", "online");
+  return cleanChatAnswer(data.answer);
+}
+
+function rememberChatExchange(question, answer) {
+  state.chatHistory.push(
+    { role: "user", text: question },
+    { role: "assistant", text: answer }
+  );
+  state.chatHistory = state.chatHistory.slice(-10);
+}
+
+function recentChatHistory() {
+  return state.chatHistory.slice(-10);
+}
+
+function cleanChatAnswer(value) {
+  const text = String(value || "").trim();
+  if (!text) {
+    return "";
+  }
+
+  if (looksLikeJsonFragment(text)) {
+    try {
+      const parsed = JSON.parse(text);
+      return cleanChatAnswer(parsed.answer);
+    } catch (error) {
+      return "";
+    }
+  }
+
+  return text;
+}
+
+function looksLikeJsonFragment(text) {
+  const trimmed = text.trim();
+  return trimmed.startsWith("{") || trimmed.startsWith("[") || /["']?answer["']?\s*:/i.test(trimmed.slice(0, 160));
+}
+
+function generateScheduleAnswer(question) {
+  const degreePlanAnswer = generateDegreePlanAnswer(question);
+  if (degreePlanAnswer) {
+    return degreePlanAnswer;
+  }
+
+  const semester = state.semesters[state.selectedSemester] || state.semesters[0];
+  const risk = calculateRisk(semester);
+  const breakdown = buildSemesterBreakdown(semester, risk);
+  const lower = question.toLowerCase();
+  const classes = breakdown.classes;
+  const hardest = [...classes].sort((a, b) => b.classScore - a.classScore)[0];
+  const credits = classes.reduce((sum, item) => sum + item.credits, 0);
+
+  if (!classes.length) {
+    return "Add a few classes first and I can analyze the schedule.";
+  }
+
+  if (lower.includes("hard") || lower.includes("difficult") || lower.includes("tough")) {
+    return `${hardest.course.name} currently looks hardest at ${hardest.classScore}/10. The biggest flags are subject difficulty ${hardest.scores.subject}/10 and labs/projects ${hardest.scores.labsProjects}/10.`;
+  }
+
+  if (lower.includes("professor") || lower.includes("teacher") || lower.includes("instructor")) {
+    return classes.map((item) => {
+      const signal = item.course.professorSignal || pendingProfessorSignal(item.course.professor || "Professor pending", item.course.professorStatus);
+      const rating = signal.rating > 0 ? `${signal.rating.toFixed(1)}/5` : "pending";
+      const difficulty = signal.difficulty ? `${signal.difficulty.toFixed(1)}/5 difficulty` : "pending difficulty";
+      return `${item.course.professor || signal.name}: ${rating}, ${difficulty}`;
+    }).join(" | ");
+  }
+
+  if (lower.includes("writing") || lower.includes("reading") || lower.includes("project") || lower.includes("lab")) {
+    return `Brief breakdown: writing ${breakdown.scores.writing}/10, reading ${breakdown.scores.reading}/10, labs/projects ${breakdown.scores.labsProjects}/10. If projects feel heavy, start CY and CS work the week it opens.`;
+  }
+
+  if (lower.includes("drop") || lower.includes("redo") || lower.includes("change") || lower.includes("advisor") || lower.includes("switch") || lower.includes("swap") || lower.includes("replace")) {
+    if (risk.score >= 72) {
+      return `This is a high-load schedule at ${risk.score}%. I would talk to an advisor and consider moving ${hardest.course.name} to a later term, then replacing it with a lower-load 3-credit general education or elective course that still fits your degree plan.`;
+    }
+    if (risk.score >= 48) {
+      return `This is workable but needs structure at ${risk.score}%. I would not redo the whole schedule yet, but I would protect weekly study blocks and watch ${hardest.course.name}.`;
+    }
+    return `I would keep the schedule as-is for now. The risk is ${risk.score}%, and the ${credits} credits look manageable if you stay consistent.`;
+  }
+
+  if (lower.includes("credit") || lower.includes("load") || lower.includes("burnout") || lower.includes("risk")) {
+    return `You have ${credits} credits and a burnout risk of ${risk.score}%. The schedule is labeled ${risk.label}. The main pressure point is ${hardest.course.name}.`;
+  }
+
+  return `${semester.title} has ${classes.length} classes and ${credits} credits. Burnout risk is ${risk.score}% (${risk.label}). Ask me about professors, hardest class, writing/reading load, or whether to change the schedule.`;
+}
+
+function generateDegreePlanAnswer(question) {
+  if (!state.degreePlan) {
+    return "";
+  }
+
+  const lower = question.toLowerCase();
+  const isPlanQuestion = [
+    "4 year",
+    "four year",
+    "degree",
+    "graduation",
+    "graduate",
+    "gen ed",
+    "general education",
+    "prereq",
+    "prerequisite",
+    "year",
+    "plan"
+  ].some((keyword) => lower.includes(keyword));
+
+  if (!isPlanQuestion) {
+    return "";
+  }
+
+  const plan = state.degreePlan;
+  const semesters = plan.semesters || [];
+  const sortedByBurnout = [...semesters].sort((a, b) => Number(b.burnoutScore || 0) - Number(a.burnoutScore || 0));
+  const hardest = sortedByBurnout[0];
+  const lightest = sortedByBurnout[sortedByBurnout.length - 1];
+  const courseCode = extractDisplayedCourseCode(question);
+
+  if (courseCode) {
+    const match = semesters
+      .flatMap((semester) => (semester.courses || []).map((course) => ({ semester, course })))
+      .find((item) => item.course.code?.toUpperCase() === courseCode);
+    if (match) {
+      return `${match.course.code} is planned for ${match.semester.term} in year ${match.semester.year}. It is grouped there to keep prerequisites moving while holding the semester near ${match.semester.credits} credits.`;
+    }
+  }
+
+  if (lower.includes("gen ed") || lower.includes("general education")) {
+    const openSlots = semesters
+      .filter((semester) => semester.genEdSlots?.length || semester.genEdRecommendations?.length)
+      .slice(0, 4)
+      .map((semester) => {
+        const labels = (semester.genEdRecommendations?.length ? semester.genEdRecommendations : semester.genEdSlots)
+          .slice(0, 2)
+          .map((item) => item.code ? `${item.code} ${item.title || ""}`.trim() : item.area)
+          .join(", ");
+        return `${semester.term}: ${labels}`;
+      });
+    return openSlots.length
+      ? `Gen eds are intentionally spread into lighter windows. ${openSlots.join(" | ")}. Use each semester's Recommend Gen Eds button for specific class options.`
+      : "The plan has no open gen ed slots marked yet. Use the Recommend Gen Eds buttons to add lighter options around major courses.";
+  }
+
+  if (lower.includes("burnout") || lower.includes("hard") || lower.includes("light")) {
+    return `${hardest.term} is the highest-load semester at ${hardest.burnoutScore}%, mostly because of ${hardest.focus || "stacked major requirements"}. ${lightest.term} is the lightest at ${lightest.burnoutScore}%, which is a good place for work, internships, or a tougher elective if needed.`;
+  }
+
+  if (lower.includes("prereq") || lower.includes("sequence") || lower.includes("order")) {
+    return `The plan keeps foundations early, then moves into upper-level major courses after the first two years. The main sequencing idea is: intro programming and math first, systems/security core in the middle, then electives, internship, and capstone near the end.`;
+  }
+
+  return `${plan.programName} is mapped across ${semesters.length} semesters and about ${plan.totalCredits} credits. The pacing goal is efficient progress with lower burnout by keeping most terms near 14-15 credits and spreading gen eds around harder major courses.`;
+}
+
+function renderSuggestions(semester, risk, breakdown, aiAnalysis) {
+  suggestionList.replaceChildren();
+
+  const courses = semester?.courses || [];
+  const heavyCourse = [...courses]
+    .filter((course) => Number(course.credits) >= 4 || Number(course.professorSignal?.difficulty || 0) >= 3.4)
+    .sort((a, b) => Number(b.credits) - Number(a.credits))[0];
+  const apiAlternative = courses
+    .flatMap((course) => course.courseAlternatives || [])
+    .find((course) => course.credits <= 3);
+
+  const suggestions = [];
+
+  if (aiAnalysis?.recommendations?.length) {
+    suggestions.push(...aiAnalysis.recommendations);
+  }
+
+  if (risk.score >= 78) {
+    suggestions.push("Redo the schedule before registration if possible: move one high-difficulty class or project-heavy class to a lighter semester.");
+  } else if (risk.score >= 62) {
+    suggestions.push("Meet with an advisor before locking this in, especially if you work more than 10 hours per week.");
+  }
+
+  if (risk.totalCredits > 15) {
+    suggestions.push(`Trim ${risk.totalCredits - 15} credits or move one lab into the next term.`);
+  }
+
+  if (heavyCourse?.name) {
+    suggestions.push(`Pair ${heavyCourse.name} with two lower-intensity electives instead of another core class.`);
+  }
+
+  if (breakdown?.scores.labsProjects >= 7) {
+    suggestions.push("Start projects the week they are assigned and reserve two fixed build/debug blocks each week.");
+  }
+
+  if (breakdown?.scores.reading >= 7 || breakdown?.scores.writing >= 7) {
+    suggestions.push("Use a weekly reading and writing queue: skim early, mark deadlines, and draft before project-heavy days.");
+  }
+
+  if (breakdown?.scores.subject >= 8) {
+    suggestions.push("Plan tutoring, office hours, or a study group during week one instead of waiting for the first difficult exam.");
+  }
+
+  if (apiAlternative?.name) {
+    suggestions.push(`API match: ${apiAlternative.name} is a lighter option to compare with your plan.`);
+  }
+
+  if (risk.difficultyAverage >= 3.2) {
+    suggestions.push("Balance tougher instructors with a lighter writing or general education course.");
+  }
+
+  if (suggestions.length < 3) {
+    suggestions.push("Keep one open study block on heavy project weeks.");
+    suggestions.push("Use a 12-15 credit target if adding work-study or athletics.");
+    suggestions.push("Review the schedule again after professors are confirmed, since difficulty ratings can change the risk score.");
+  }
+
+  suggestions.slice(0, 4).forEach((suggestion) => {
+    const item = document.createElement("li");
+    item.textContent = suggestion;
+    suggestionList.append(item);
+  });
+}
+
+function syncLookupDetail(row, course) {
+  const detail = row.querySelector(".lookup-detail");
+  const parts = [];
+
+  if (course.courseStatus === "loading" || course.courseStatus === "searching") {
+    parts.push("Looking up course catalog matches...");
+  } else if (course.courseStatus === "not-found") {
+    parts.push("No course match found yet.");
+  } else if (course.courseStatus === "error") {
+    parts.push("Course lookup is offline. Local scoring still works.");
+  }
+
+  if (course.courseInfo) {
+    const info = course.courseInfo;
+    const source = sourceLabel(info.source || course.courseProvider);
+    const title = `${escapeHtml(info.code)} - ${escapeHtml(info.title || "Course title unavailable")}`;
+    const workload = info.workloadHours ? `, ${escapeHtml(info.workloadHours)} hrs/week` : "";
+    const offered = info.offered?.length ? `, ${escapeHtml(info.offered.join("/"))}` : "";
+    const description = info.description ? `, ${escapeHtml(info.description)}` : "";
+    const link = safeUrl(info.url)
+      ? `<a href="${escapeAttribute(info.url)}" target="_blank" rel="noreferrer"><strong>${title}</strong></a>`
+      : `<strong>${title}</strong>`;
+    parts.push(`${link} (${escapeHtml(info.credits)} credits${workload}${offered}${description}) <span class="source-tag">${escapeHtml(source)}</span>`);
+  }
+
+  if (course.professorStatus === "loading" || course.professorStatus === "searching") {
+    parts.push("Looking up professor ratings...");
+  } else if (course.professorStatus === "not-found") {
+    parts.push("No professor rating found yet.");
+  } else if (course.professorStatus === "error") {
+    parts.push("Professor lookup is offline.");
+  }
+
+  if (course.professorSignal && course.professorSignal.rating > 0) {
+    const signal = course.professorSignal;
+    const source = sourceLabel(signal.source);
+    parts.push(`<strong>${escapeHtml(signal.name)}</strong>: ${escapeHtml(signal.rating.toFixed(1))}/5 rating, ${escapeHtml(signal.difficulty.toFixed(1))}/5 difficulty <span class="source-tag">${escapeHtml(source)}</span>`);
+  }
+
+  detail.innerHTML = parts.join(" ");
+  detail.classList.toggle("visible", parts.length > 0);
+}
+
+async function fetchJson(path, params = {}) {
+  const url = new URL(path, window.location.origin);
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
+      url.searchParams.set(key, value);
+    }
+  });
+
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Request failed: ${response.status}`);
+  }
+  return response.json();
+}
+
+async function postJson(path, payload) {
+  const response = await fetch(path, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`Request failed: ${response.status}. ${detail.slice(0, 500)}`);
+  }
+
+  return response.json();
+}
+
+async function postForm(path, formData) {
+  const response = await fetch(path, {
+    method: "POST",
+    body: formData
+  });
+
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`Request failed: ${response.status}. ${detail.slice(0, 500)}`);
+  }
+
+  return response.json();
+}
+
+function buildAiSchedulePayload(semester, localRisk, breakdown) {
+  return {
+    profile: {
+      university: currentUniversity(),
+      major: document.querySelector("#major")?.value?.trim() || "",
+      creditsCompleted: Number(document.querySelector("#creditsCompleted")?.value || 0)
+    },
+    semester: {
+      title: semester?.title || "",
+      courses: (semester?.courses || []).map((course) => ({
+        name: course.name || "",
+        credits: Number(course.credits || 0),
+        professor: course.professor || "",
+        courseInfo: compactCourseInfo(course.courseInfo),
+        professorSignal: compactProfessorSignal(course.professorSignal)
+      }))
+    },
+    localRisk,
+    breakdown: compactBreakdownForAi(breakdown),
+    degreePlan: degreePlanForAi()
+  };
+}
+
+function compactCourseInfo(info = {}) {
+  info = info || {};
+  return {
+    code: info.code || "",
+    title: info.title || "",
+    credits: info.credits || "",
+    description: info.description || "",
+    prerequisites: info.prerequisites || "",
+    source: info.source || "",
+    workloadHours: info.workloadHours || ""
+  };
+}
+
+function compactProfessorSignal(signal = {}) {
+  signal = signal || {};
+  return {
+    name: signal.name || "",
+    rating: Number(signal.rating || 0),
+    difficulty: Number(signal.difficulty || 0),
+    wouldTakeAgain: signal.wouldTakeAgain || "",
+    numRatings: Number(signal.numRatings || 0),
+    tags: Array.isArray(signal.tags) ? signal.tags.slice(0, 4) : [],
+    source: signal.source || ""
+  };
+}
+
+function compactBreakdownForAi(breakdown = {}) {
+  return {
+    scores: breakdown.scores || {},
+    summary: breakdown.summary || "",
+    classes: (breakdown.classes || []).map((item) => ({
+      title: item.title || item.course?.name || "",
+      credits: item.credits,
+      classScore: item.classScore,
+      burnoutPoints: item.burnoutPoints,
+      scores: item.scores || {},
+      note: item.note || "",
+      course: {
+        name: item.course?.name || "",
+        professor: item.course?.professor || ""
+      }
+    }))
+  };
+}
+
+function scheduleSignature(semester) {
+  if (!semester) {
+    return "";
+  }
+
+  return JSON.stringify({
+    university: currentUniversity(),
+    title: semester.title || "",
+    courses: (semester.courses || []).map((course) => ({
+      name: course.name || "",
+      credits: Number(course.credits || 0),
+      professor: course.professor || "",
+      courseCode: course.courseInfo?.code || "",
+      professorRating: Number(course.professorSignal?.rating || 0),
+      professorDifficulty: Number(course.professorSignal?.difficulty || 0)
+    }))
+  });
+}
+
+function setCourseSuggestions(results) {
+  courseSuggestions.replaceChildren();
+  results.slice(0, 8).forEach((course) => {
+    const option = document.createElement("option");
+    option.value = course.name || `${course.code} - ${course.title}`;
+    option.label = sourceLabel(course.source);
+    courseSuggestions.append(option);
+  });
+}
+
+function setProfessorSuggestions(results) {
+  professorSuggestions.replaceChildren();
+  results.slice(0, 8).forEach((professor) => {
+    const option = document.createElement("option");
+    option.value = professor.name;
+    option.label = professor.department || sourceLabel(professor.source);
+    professorSuggestions.append(option);
+  });
+}
+
+function normalizeProfessorSignal(signal, provider, fallback) {
+  return {
+    name: signal.name || "Professor pending",
+    department: signal.department || "Department unavailable",
+    school: signal.school || currentUniversity(),
+    rating: Number(signal.rating || 0),
+    difficulty: Number(signal.difficulty || 2.5),
+    wouldTakeAgain: signal.wouldTakeAgain,
+    numRatings: Number(signal.numRatings || 0),
+    tags: Array.isArray(signal.tags) && signal.tags.length ? signal.tags : ["Review ratings"],
+    link: signal.link || "",
+    source: fallback ? "Local sample professor data" : signal.source || provider || "Professor API"
+  };
+}
+
+function pendingProfessorSignal(name, status) {
+  return {
+    name,
+    rating: 0,
+    difficulty: 2.5,
+    tags: [status === "error" ? "Lookup offline" : "Pending lookup"],
+    link: "",
+    source: "Pending"
+  };
+}
+
+function shouldAdoptCourseName(query, course) {
+  const clean = query.trim().toLowerCase();
+  return clean === course.code?.toLowerCase() || !clean.includes(" - ");
+}
+
+function clampCredits(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    return null;
+  }
+  return Math.max(1, Math.min(4, Math.round(number)));
+}
+
+function clampScore(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    return 1;
+  }
+  return Math.max(1, Math.min(10, Math.round(number)));
+}
+
+function average(values) {
+  const clean = values.filter((value) => Number.isFinite(value));
+  if (!clean.length) {
+    return 1;
+  }
+  return clean.reduce((sum, value) => sum + value, 0) / clean.length;
+}
+
+function keywordScore(text, keywords) {
+  return keywords.reduce((sum, keyword) => sum + (text.includes(keyword) ? 1 : 0), 0);
+}
+
+function creditLoadScore(totalCredits, courseCount) {
+  let score = 2;
+  score += Math.max(0, totalCredits - 9) * 0.7;
+  score += Math.max(0, courseCount - 4) * 0.8;
+  if (totalCredits >= 15) {
+    score += 1;
+  }
+  return clampScore(score);
+}
+
+function extractDisplayedCourseCode(value) {
+  const match = String(value).match(/\b[A-Z]{2,4}\s+\d{3}[A-Z]?\b/i);
+  return match ? match[0].toUpperCase().replace(/\s+/, " ") : "";
+}
+
+function scoreColor(score) {
+  if (score >= 8) {
+    return "var(--danger)";
+  }
+  if (score >= 6) {
+    return "var(--warning)";
+  }
+  return "var(--accent)";
+}
+
+function summarizeSchedule(scores, risk, classDetails) {
+  const highFactors = [
+    ["writing", scores.writing],
+    ["reading", scores.reading],
+    ["labs/projects", scores.labsProjects],
+    ["subject difficulty", scores.subject],
+    ["professor difficulty", scores.professor],
+    ["credit load", scores.creditLoad]
+  ].filter(([, score]) => score >= 7);
+
+  const heaviest = [...classDetails].sort((a, b) => b.classScore - a.classScore)[0];
+
+  if (!classDetails.length) {
+    return "Add classes to generate a real semester comment.";
+  }
+
+  if (risk.score >= 72) {
+    return `This schedule is carrying high strain, mainly from ${highFactors.map(([label]) => label).slice(0, 2).join(" and ") || "stacked course demands"}. ${heaviest?.course.name || "The hardest class"} needs special attention.`;
+  }
+
+  if (risk.score >= 48) {
+    return `This plan is workable but needs structure. The biggest pressure point is ${highFactors[0]?.[0] || "overall pacing"}, with ${heaviest?.course.name || "one course"} likely to set the weekly rhythm.`;
+  }
+
+  return `This looks balanced if you keep weekly work consistent. The main watch item is ${heaviest?.course.name || "your hardest class"}, but the overall load is manageable.`;
+}
+
+function classNote(scores, course, classScore) {
+  const concerns = [];
+  if (scores.labsProjects >= 7) {
+    concerns.push("project or lab work");
+  }
+  if (scores.subject >= 7) {
+    concerns.push("concept difficulty");
+  }
+  if (scores.reading >= 7) {
+    concerns.push("reading load");
+  }
+  if (scores.writing >= 7) {
+    concerns.push("writing load");
+  }
+  if (scores.professor >= 7) {
+    concerns.push("instructor difficulty");
+  }
+
+  if (!concerns.length && classScore <= 4) {
+    return "This should be one of the steadier parts of the schedule if assignments stay on pace.";
+  }
+
+  if (!concerns.length) {
+    return "This class looks moderate: keep up with weekly work and avoid letting small assignments stack.";
+  }
+
+  return `Watch ${concerns.slice(0, 2).join(" and ")} here. Build recurring study time for ${course.name || "this class"} before the semester gets crowded.`;
+}
+
+function burnoutScoreExplanation(risk, breakdown) {
+  const scores = breakdown.scores;
+  const topFactor = [
+    ["writing", scores.writing],
+    ["reading", scores.reading],
+    ["labs/projects", scores.labsProjects],
+    ["subject difficulty", scores.subject],
+    ["professor difficulty", scores.professor],
+    ["credit load", scores.creditLoad]
+  ].sort((a, b) => b[1] - a[1])[0];
+
+  return `The burnout score combines credit load, number of classes, professor difficulty, project/lab pressure, reading and writing expectations, and subject complexity. Right now the strongest driver is ${topFactor[0]} at ${topFactor[1]}/10.`;
+}
+
+function sourceLabel(source = "") {
+  const text = source.toLowerCase();
+  if (text.includes("fireroad")) {
+    return "FireRoad";
+  }
+  if (text.includes("semo")) {
+    return "SEMO";
+  }
+  if (text.includes("rate my professor")) {
+    return "RMP";
+  }
+  if (text.includes("local") || text.includes("generated")) {
+    return "Sample";
+  }
+  if (text.includes("pending")) {
+    return "Pending";
+  }
+  return source || "API";
+}
+
+function professorProfileUrl(signal, name) {
+  if (safeUrl(signal?.link)) {
+    return signal.link;
+  }
+
+  const query = encodeURIComponent(name);
+  return `https://www.ratemyprofessors.com/search/professors/916?q=${query}`;
+}
+
+function currentUniversity() {
+  return universityInput.value.trim() || defaultUniversity;
+}
+
+function setApiStatus(text, mode) {
+  apiStatus.querySelector(".api-status-label").textContent = text;
+  const dot = apiStatus.querySelector(".status-dot");
+  dot.classList.toggle("pending", mode === "pending");
+  dot.classList.toggle("offline", mode === "offline");
+}
+
+function reportGeminiFallback(context, detail) {
+  const message = detail || "No error detail was returned.";
+  console.warn(`[DegreeWise] Gemini ${context} fallback: ${message}`);
+  setAiStatus("Gemini error", "offline", `${context}: ${message}`);
+}
+
+function setAiStatus(text, mode, detail = "") {
+  aiStatus.querySelector(".ai-status-label").textContent = text;
+  const baseTitle = mode === "online"
+    ? "Gemini is being used for AI analysis or chat"
+    : mode === "pending"
+      ? "Checking whether Gemini can answer this request"
+      : "Using the local fallback analysis";
+  aiStatus.title = detail ? `${baseTitle}. Last Gemini error: ${detail}` : baseTitle;
+
+  const dot = aiStatus.querySelector(".status-dot");
+  dot.classList.toggle("pending", mode === "pending");
+  dot.classList.toggle("offline", mode === "offline");
+  dot.classList.toggle("local", mode === "local");
+}
+
+function clearRemoteSignals() {
+  state.semesters.forEach((semester) => {
+    semester.courses.forEach((course) => {
+      course.courseInfo = null;
+      course.courseAlternatives = [];
+      course.professorSignal = null;
+      course.lastCourseLookupQuery = "";
+      course.lastProfessorLookupQuery = "";
+    });
+  });
+}
+
+function emptyState(message) {
+  const item = document.createElement("div");
+  item.className = "professor-card";
+  item.textContent = message;
+  return item;
+}
+
+function nextSemesterTitle(currentTitle) {
+  const match = currentTitle.match(/\b(Fall|Spring|Summer)\s+(\d{4})\b/i);
+  if (!match) {
+    return `Semester ${state.semesters.length + 1}`;
+  }
+
+  const term = match[1].toLowerCase();
+  const year = Number(match[2]);
+
+  if (term === "fall") {
+    return `Spring ${year + 1}`;
+  }
+
+  if (term === "spring") {
+    return `Fall ${year}`;
+  }
+
+  return `Fall ${year}`;
+}
+
+function cloneDemoSemesters() {
+  return JSON.parse(JSON.stringify(demoSemesters));
+}
+
+function demoCourseInfo(code, title, section, crn, instructor) {
+  return {
+    code,
+    title,
+    name: `${code} - ${title}`,
+    credits: 3,
+    units: 9,
+    level: "Undergraduate",
+    offered: ["Summer 2026"],
+    instructors: [instructor],
+    description: `Section ${section}. CRN ${crn}. Registered via web.`,
+    prerequisites: "",
+    workloadHours: 9,
+    rating: null,
+    url: "",
+    source: "Registered SEMO schedule",
+    school: "Southeast Missouri State University",
+    section,
+    campus: "",
+    crn,
+    days: "",
+    time: "",
+    session: "Registered via web"
+  };
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function escapeAttribute(value) {
+  return escapeHtml(value);
+}
+
+function safeUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch (error) {
+    return false;
+  }
+}
+
+checkApiHealth();
+render();
