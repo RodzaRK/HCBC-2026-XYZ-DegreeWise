@@ -47,7 +47,9 @@ const state = {
   aiPendingSignature: "",
   chatHistory: [],
   degreePlan: null,
-  degreePlanUploading: false
+  degreePlanUploading: false,
+  simulationBase: null,
+  simulationEvents: []
 };
 
 const semesterContainer = document.querySelector("#semesters");
@@ -76,10 +78,62 @@ const degreeMapButton = document.querySelector("#degreeMapButton");
 const degreeMapStatus = document.querySelector("#degreeMapStatus");
 const degreePlanSummary = document.querySelector("#degreePlanSummary");
 const degreePlanGrid = document.querySelector("#degreePlanGrid");
+const advisorExport = document.querySelector("#advisorExport");
+const startSimulation = document.querySelector("#startSimulation");
+const saveSimulation = document.querySelector("#saveSimulation");
+const discardSimulation = document.querySelector("#discardSimulation");
+const simulateAddLight = document.querySelector("#simulateAddLight");
+const simulateMoveHardest = document.querySelector("#simulateMoveHardest");
+const simulateSwapLoad = document.querySelector("#simulateSwapLoad");
+const simulationTitle = document.querySelector("#simulationTitle");
+const simulationStatus = document.querySelector("#simulationStatus");
+const lifeBalanceLabel = document.querySelector("#lifeBalanceLabel");
+const lifeBalanceScore = document.querySelector("#lifeBalanceScore");
+const lifeBalanceMeter = document.querySelector("#lifeBalanceMeter");
+const lifeBalanceReasons = document.querySelector("#lifeBalanceReasons");
+const prerequisiteWarnings = document.querySelector("#prerequisiteWarnings");
+const backupPlanList = document.querySelector("#backupPlanList");
 
 const courseSearchTimers = new WeakMap();
 const professorLookupTimers = new WeakMap();
 let aiAnalysisTimer = null;
+
+const prerequisiteRules = {
+  "CS 265": { allOf: ["CS 155"] },
+  "CS 300": { anyOf: [["CS 265"], ["CS 155", "MA 223"]] },
+  "CS 351": { allOf: ["CS 265"] },
+  "CS 380": { allOf: ["CS 351"] },
+  "CS 390": { allOf: ["CS 300", "MA 223"] },
+  "CS 440": { allOf: ["CS 380"] },
+  "CS 445": { allOf: ["CS 300"] },
+  "CS 460": { allOf: ["CS 300"] },
+  "CS 480": { anyOf: [["CS 300"], ["CY 310"]] },
+  "CS 495": { allOf: ["CS 499"] },
+  "CS 499": { allOf: ["CS 300"] },
+  "CY 310": { allOf: ["CY 201"] },
+  "CY 320": { allOf: ["CY 201"] },
+  "CY 350": { allOf: ["CY 310"] },
+  "CY 410": { allOf: ["CY 320"] },
+  "CY 430": { allOf: ["CY 310"] },
+  "CY 440": { allOf: ["CY 350"] },
+  "CY 450": { allOf: ["CY 310"] },
+  "CY 470": { anyOf: [["CY 410"], ["CY 430"]] },
+  "CY 480": { allOf: ["CY 350"] },
+  "CY 490": { allOf: ["CY 440", "CY 450"] },
+  "MA 345": { anyOf: [["MA 223"], ["MA 134"]] }
+};
+
+const backupCourseCatalog = [
+  { code: "PY 101", title: "Introduction to Psychology", credits: 3, requirement: "Social Science", workload: 3, professorQuality: 4.1 },
+  { code: "RS 202", title: "Old Testament Literature", credits: 3, requirement: "Humanities", workload: 4, professorQuality: 4.0 },
+  { code: "SC 105", title: "Fundamentals of Oral Communication", credits: 3, requirement: "Oral Communication", workload: 3, professorQuality: 4.2 },
+  { code: "PS 103", title: "US Political Systems", credits: 3, requirement: "Civics", workload: 4, professorQuality: 3.9 },
+  { code: "AR 100", title: "Art Appreciation", credits: 3, requirement: "Fine Arts", workload: 2, professorQuality: 4.0 },
+  { code: "GO 150", title: "People and Places of the World", credits: 3, requirement: "Global Perspectives", workload: 3, professorQuality: 3.8 },
+  { code: "CY 201", title: "Introduction to Cybersecurity", credits: 3, requirement: "Major Foundation", workload: 5, professorQuality: 4.2 },
+  { code: "CS 265", title: "Computer Science II", credits: 3, requirement: "Major Sequence", workload: 6, professorQuality: 4.1 },
+  { code: "MA 223", title: "Discrete Mathematics", credits: 3, requirement: "Math", workload: 6, professorQuality: 3.9 }
+];
 
 const savedTheme = localStorage.getItem("degreewise-theme");
 if (savedTheme) {
@@ -102,6 +156,8 @@ resetDemo.addEventListener("click", () => {
   state.aiDisabled = false;
   state.aiPendingSignature = "";
   state.chatHistory = [];
+  state.simulationBase = null;
+  state.simulationEvents = [];
   resetChatMessages();
   setAiStatus("AI checking", "pending");
   render();
@@ -115,6 +171,61 @@ universityInput.addEventListener("change", () => {
   state.chatHistory = [];
   resetChatMessages();
   setAiStatus("AI checking", "pending");
+  render();
+});
+
+advisorExport.addEventListener("click", () => {
+  exportAdvisorSummary();
+});
+
+startSimulation.addEventListener("click", () => {
+  beginSimulation("Started a temporary what-if simulation.");
+});
+
+saveSimulation.addEventListener("click", () => {
+  state.simulationBase = null;
+  state.simulationEvents = ["Simulation saved into the live plan."];
+  render();
+});
+
+discardSimulation.addEventListener("click", () => {
+  if (state.simulationBase) {
+    state.semesters = JSON.parse(JSON.stringify(state.simulationBase));
+  }
+  state.simulationBase = null;
+  state.simulationEvents = ["Temporary simulation discarded."];
+  render();
+});
+
+simulateAddLight.addEventListener("click", () => {
+  beginSimulation("Added a light general education class.");
+  const semester = state.semesters[state.selectedSemester] || state.semesters[0];
+  const option = nextLightBackupCourse(semester);
+  semester.courses.push({
+    name: `${option.code} - ${option.title}`,
+    credits: option.credits,
+    professor: "",
+    courseInfo: {
+      code: option.code,
+      title: option.title,
+      credits: option.credits,
+      description: `${option.requirement}. Low-load backup option.`,
+      workloadHours: option.workload * 2,
+      source: "What-if simulator"
+    }
+  });
+  render();
+});
+
+simulateMoveHardest.addEventListener("click", () => {
+  beginSimulation("Moved the hardest current class one semester later.");
+  moveHardestCourseToNextSemester();
+  render();
+});
+
+simulateSwapLoad.addEventListener("click", () => {
+  beginSimulation("Swapped a high-load class for a lower-load backup.");
+  swapHighestLoadCourse();
   render();
 });
 
@@ -191,11 +302,17 @@ function render() {
       const nameInput = row.querySelector(".class-name");
       const creditSelect = row.querySelector(".class-credits");
       const professorInput = row.querySelector(".class-professor");
+      const daysInput = row.querySelector(".class-days");
+      const startInput = row.querySelector(".class-start");
+      const modalitySelect = row.querySelector(".class-modality");
       const removeButton = row.querySelector(".remove-class");
 
       nameInput.value = course.name;
       creditSelect.value = String(course.credits || 3);
       professorInput.value = course.professor;
+      daysInput.value = course.days || course.courseInfo?.days || "";
+      startInput.value = course.startTime || timeValueFromCourse(course);
+      modalitySelect.value = course.modality || "";
       syncLookupDetail(row, course);
 
       nameInput.addEventListener("input", (event) => {
@@ -236,6 +353,21 @@ function render() {
 
       professorInput.addEventListener("blur", () => {
         lookupProfessor(course, row);
+      });
+
+      daysInput.addEventListener("input", (event) => {
+        course.days = event.target.value;
+        updateAnalytics();
+      });
+
+      startInput.addEventListener("change", (event) => {
+        course.startTime = event.target.value;
+        updateAnalytics();
+      });
+
+      modalitySelect.addEventListener("change", (event) => {
+        course.modality = event.target.value;
+        updateAnalytics();
       });
 
       removeButton.addEventListener("click", () => {
@@ -498,8 +630,23 @@ function updateAnalytics() {
 
   renderBriefBreakdown(breakdown, risk, aiAnalysis);
   renderDetailedBreakdown(breakdown, risk);
+  safeRenderPanel(() => renderLifeBalance(semester, breakdown, risk), "life balance");
+  safeRenderPanel(renderPrerequisiteWarnings, "prerequisite checks");
+  safeRenderPanel(() => renderBackupPlans(semester, breakdown, risk), "backup plans");
   renderSuggestions(semester, risk, breakdown, aiAnalysis);
+  safeRenderPanel(() => renderSimulationState(semester, risk, breakdown), "simulation");
   scheduleGeminiAnalysis(semester);
+}
+
+function safeRenderPanel(callback, label) {
+  try {
+    callback();
+  } catch (error) {
+    console.warn(`[DegreeWise] ${label} render failed: ${error.message}`);
+    if (label === "life balance" && lifeBalanceReasons) {
+      lifeBalanceReasons.replaceChildren(checkItem(`Campus-life balance could not render: ${error.message}`, "warn"));
+    }
+  }
 }
 
 function scheduleGeminiAnalysis(semester) {
@@ -619,7 +766,8 @@ function buildSemesterBreakdown(semester, risk) {
   return {
     classes: classDetails,
     scores: totals,
-    summary: summarizeSchedule(totals, risk, classDetails)
+    summary: summarizeSchedule(totals, risk, classDetails),
+    reasons: buildBurnoutReasons(totals, risk, classDetails)
   };
 }
 
@@ -753,6 +901,15 @@ function renderDetailedBreakdown(breakdown, risk) {
   summary.querySelector(".detail-subtitle").textContent = `${breakdown.classes.length} classes, ${breakdown.classes.reduce((sum, item) => sum + item.credits, 0)} credits`;
   summary.querySelector(".detail-score").textContent = `${risk.score}%`;
   summary.querySelector(".detail-note").textContent = burnoutScoreExplanation(risk, breakdown);
+  const reasonList = document.createElement("div");
+  reasonList.className = "reason-chip-list";
+  (breakdown.reasons || []).forEach((reason) => {
+    const chip = document.createElement("span");
+    chip.className = `reason-chip ${reason.level}`;
+    chip.textContent = `${reason.label}: ${reason.detail}`;
+    reasonList.append(chip);
+  });
+  summary.append(reasonList);
   detailBreakdown.append(summary);
 
   if (!breakdown.classes.length) {
@@ -861,6 +1018,605 @@ function renderDetailedBreakdown(breakdown, risk) {
     article.append(head, compactStats, details);
     detailBreakdown.append(article);
   });
+}
+
+function beginSimulation(message) {
+  if (!state.simulationBase) {
+    state.simulationBase = JSON.parse(JSON.stringify(state.semesters));
+    state.simulationEvents = [];
+  }
+  if (message) {
+    state.simulationEvents.unshift(message);
+    state.simulationEvents = state.simulationEvents.slice(0, 4);
+  }
+}
+
+function renderSimulationState(semester, risk, breakdown) {
+  const active = Boolean(state.simulationBase);
+  simulationTitle.textContent = active ? "Temporary Simulation" : "Live Plan";
+  startSimulation.hidden = active;
+  saveSimulation.hidden = !active;
+  discardSimulation.hidden = !active;
+
+  const baseSemester = state.simulationBase?.[state.selectedSemester];
+  if (active && baseSemester) {
+    const baseRisk = calculateRisk(baseSemester);
+    const baseCredits = baseSemester.courses.reduce((sum, course) => sum + Number(course.credits || 0), 0);
+    const creditDelta = risk.totalCredits - baseCredits;
+    const riskDelta = risk.score - baseRisk.score;
+    const impact = graduationImpactSummary();
+    simulationStatus.textContent = `Simulation only: ${formatSigned(creditDelta)} credits, ${formatSigned(riskDelta)} burnout points, ${impact}. ${state.simulationEvents[0] || "Edits are temporary until saved."}`;
+    simulationStatus.dataset.mode = "active";
+    return;
+  }
+
+  const lastEvent = state.simulationEvents[0];
+  simulationStatus.textContent = lastEvent || "Make edits normally, or start a temporary simulation before changing the plan.";
+  simulationStatus.dataset.mode = "live";
+}
+
+function moveHardestCourseToNextSemester() {
+  const semester = state.semesters[state.selectedSemester] || state.semesters[0];
+  if (!semester?.courses?.length) {
+    state.simulationEvents.unshift("No class is available to move.");
+    return;
+  }
+
+  const risk = calculateRisk(semester);
+  const breakdown = buildSemesterBreakdown(semester, risk);
+  const hardest = [...breakdown.classes].sort((a, b) => b.classScore - a.classScore)[0];
+  const courseIndex = semester.courses.findIndex((course) => course === hardest?.course);
+  if (courseIndex < 0) {
+    return;
+  }
+
+  const [course] = semester.courses.splice(courseIndex, 1);
+  let nextSemester = state.semesters[state.selectedSemester + 1];
+  if (!nextSemester) {
+    nextSemester = {
+      title: nextSemesterTitle(semester.title || "Summer 2026"),
+      courses: []
+    };
+    state.semesters.splice(state.selectedSemester + 1, 0, nextSemester);
+  }
+  if (nextSemester.courses.length === 1 && !nextSemester.courses[0].name.trim()) {
+    nextSemester.courses.splice(0, 1);
+  }
+  nextSemester.courses.push(course);
+}
+
+function swapHighestLoadCourse() {
+  const semester = state.semesters[state.selectedSemester] || state.semesters[0];
+  const risk = calculateRisk(semester);
+  const breakdown = buildSemesterBreakdown(semester, risk);
+  const hardest = [...breakdown.classes].sort((a, b) => b.classScore - a.classScore)[0];
+  if (!hardest) {
+    state.simulationEvents.unshift("No class is available to swap.");
+    return;
+  }
+
+  const courseIndex = semester.courses.findIndex((course) => course === hardest.course);
+  const replacement = nextLightBackupCourse(semester);
+  semester.courses.splice(courseIndex, 1, {
+    name: `${replacement.code} - ${replacement.title}`,
+    credits: replacement.credits,
+    professor: "",
+    courseInfo: {
+      code: replacement.code,
+      title: replacement.title,
+      credits: replacement.credits,
+      description: `${replacement.requirement}. Backup option for what-if planning.`,
+      workloadHours: replacement.workload * 2,
+      source: "What-if simulator"
+    }
+  });
+}
+
+function nextLightBackupCourse(semester) {
+  const used = new Set((semester?.courses || []).map((course) => normalizeCourseKey(course.name || course.courseInfo?.code || "")));
+  return backupCourseCatalog.find((course) => !used.has(normalizeCourseKey(course.code))) || backupCourseCatalog[0];
+}
+
+function renderLifeBalance(semester, breakdown, risk) {
+  const balance = calculateLifeBalance(semester, breakdown, risk);
+  const color = balance.score >= 74 ? "var(--accent)" : balance.score >= 55 ? "var(--warning)" : "var(--danger)";
+
+  lifeBalanceLabel.textContent = balance.label;
+  lifeBalanceScore.textContent = `${balance.score}%`;
+  lifeBalanceScore.style.color = color;
+  lifeBalanceMeter.style.width = `${balance.score}%`;
+  lifeBalanceMeter.style.background = color;
+  lifeBalanceReasons.replaceChildren();
+  balance.reasons.slice(0, 4).forEach((reason) => {
+    const item = document.createElement("li");
+    item.textContent = reason;
+    lifeBalanceReasons.append(item);
+  });
+}
+
+function calculateLifeBalance(semester, breakdown, risk) {
+  const courses = (semester?.courses || []).filter((course) => course.name.trim());
+  const meetings = courses.map(courseMeetingInfo).filter(Boolean);
+  const dayGroups = groupMeetingsByDay(meetings);
+  const reasons = [];
+  let score = 88;
+
+  if (risk.totalCredits > 15) {
+    score -= (risk.totalCredits - 15) * 6;
+    reasons.push(`${risk.totalCredits} credits leaves less room for work, clubs, commute, and recovery.`);
+  }
+
+  if (courses.length >= 6) {
+    score -= 8;
+    reasons.push("Six or more classes means more context-switching and weekly deadlines.");
+  }
+
+  const technicalCount = breakdown.classes.filter((item) => ["CS", "CY", "MA"].includes((item.code || "").split(" ")[0])).length;
+  if (technicalCount >= 4) {
+    score -= 8;
+    reasons.push("Many technical courses are stacked in the same term.");
+  }
+
+  if (meetings.length) {
+    const early = meetings.filter((meeting) => meeting.start < 510).length;
+    const late = meetings.filter((meeting) => meeting.start >= 1020).length;
+    if (early) {
+      score -= early * 4;
+      reasons.push(`${early} early class${early > 1 ? "es" : ""} may pressure sleep and commute time.`);
+    }
+    if (late) {
+      score -= late * 5;
+      reasons.push(`${late} late class${late > 1 ? "es" : ""} can cut into work, dinner, or evening study.`);
+    }
+
+    Object.entries(dayGroups).forEach(([day, dayMeetings]) => {
+      dayMeetings.sort((a, b) => a.start - b.start);
+      for (let index = 1; index < dayMeetings.length; index += 1) {
+        const gap = dayMeetings[index].start - dayMeetings[index - 1].end;
+        if (gap >= 0 && gap <= 15) {
+          score -= 4;
+          reasons.push(`${day} has back-to-back classes with almost no transition time.`);
+        } else if (gap >= 150) {
+          score -= 3;
+          reasons.push(`${day} has a long campus gap that may be hard to use well.`);
+        }
+      }
+      const hasLunch = dayMeetings.some((meeting) => meeting.end <= 690) || dayMeetings.some((meeting) => meeting.start >= 810);
+      const overlapsLunch = dayMeetings.some((meeting) => meeting.start < 780 && meeting.end > 720);
+      if (dayMeetings.length >= 3 && overlapsLunch && !hasLunch) {
+        score -= 5;
+        reasons.push(`${day} may not have a clear lunch break.`);
+      }
+    });
+  } else {
+    score -= 4;
+    reasons.push("Meeting times are missing, so life balance is estimated from workload only.");
+  }
+
+  const onlineCount = courses.filter((course) => normalizeSpaces(course.modality || course.courseInfo?.session).toLowerCase().includes("online")).length;
+  if (onlineCount) {
+    score += Math.min(6, onlineCount * 3);
+    reasons.push(`${onlineCount} online or flexible class${onlineCount > 1 ? "es" : ""} can reduce campus friction.`);
+  }
+
+  if (!reasons.length) {
+    reasons.push("Credit load, timing, and course mix look livable.");
+  }
+
+  const bounded = Math.max(25, Math.min(98, Math.round(score)));
+  const label = bounded >= 74 ? "Livable" : bounded >= 55 ? "Tight" : "Overloaded";
+  return { score: bounded, label, reasons };
+}
+
+function renderPrerequisiteWarnings() {
+  const warnings = analyzePrerequisites();
+  prerequisiteWarnings.replaceChildren();
+
+  if (!warnings.length) {
+    prerequisiteWarnings.append(checkItem("Prerequisite order looks clear for visible rules.", "ok"));
+    return;
+  }
+
+  warnings.slice(0, 6).forEach((warning) => {
+    prerequisiteWarnings.append(checkItem(`${warning.course}: ${warning.message}`, warning.level));
+  });
+}
+
+function analyzePrerequisites() {
+  const entries = plannedCourseEntries();
+  const completed = completedCourseCodes(entries);
+  const warnings = [];
+  const seen = new Set(completed);
+
+  entries.forEach((entry) => {
+    const code = normalizeCourseKey(entry.code);
+    if (!code || !/[A-Z]{2,4}\s+\d/.test(code)) {
+      return;
+    }
+
+    const rule = mergePrerequisiteRules(prerequisiteRules[code], parsePrerequisiteText(entry.prerequisites || ""));
+    if (!rule) {
+      seen.add(code);
+      return;
+    }
+
+    const missingAll = (rule.allOf || []).filter((required) => !seen.has(normalizeCourseKey(required)));
+    if (missingAll.length) {
+      warnings.push({
+        course: code,
+        level: "warn",
+        message: `needs ${missingAll.join(", ")} before ${entry.term}.`
+      });
+    }
+
+    if (rule.anyOf?.length) {
+      const satisfied = rule.anyOf.some((group) => group.every((required) => seen.has(normalizeCourseKey(required))));
+      if (!satisfied) {
+        warnings.push({
+          course: code,
+          level: "warn",
+          message: `needs one of these prerequisite paths first: ${rule.anyOf.map((group) => group.join(" + ")).join(" or ")}.`
+        });
+      }
+    }
+
+    seen.add(code);
+  });
+
+  return warnings;
+}
+
+function renderBackupPlans(semester, breakdown, risk) {
+  const backups = rankBackupCourses(semester, breakdown, risk);
+  backupPlanList.replaceChildren();
+
+  if (!backups.length) {
+    backupPlanList.append(checkItem("Add classes to generate backup options.", "info"));
+    return;
+  }
+
+  backups.slice(0, 4).forEach((backup, index) => {
+    backupPlanList.append(checkItem(`#${index + 1} ${backup.code} - ${backup.title}: ${backup.reason}`, backup.level));
+  });
+}
+
+function rankBackupCourses(semester, breakdown, risk) {
+  const used = new Set((semester?.courses || []).map((course) => normalizeCourseKey(course.name || course.courseInfo?.code || "")));
+  const hardest = [...(breakdown.classes || [])].sort((a, b) => b.classScore - a.classScore)[0];
+  const targetRequirement = hardest?.code?.startsWith("CS") || hardest?.code?.startsWith("CY") ? "Major" : "Gen Ed";
+  const satisfied = new Set(plannedCourseEntries().map((entry) => normalizeCourseKey(entry.code)));
+
+  return backupCourseCatalog
+    .filter((course) => !used.has(normalizeCourseKey(course.code)))
+    .map((course) => {
+      const prereqRule = prerequisiteRules[course.code];
+      const prereqFit = !prereqRule || prerequisiteRuleSatisfied(prereqRule, satisfied);
+      const requirementFit = targetRequirement === "Major"
+        ? (course.requirement.includes("Major") ? 28 : 15)
+        : (!course.requirement.includes("Major") ? 28 : 12);
+      const score = requirementFit
+        + (course.credits === 3 ? 14 : 8)
+        + Math.max(0, 18 - course.workload * 2)
+        + course.professorQuality * 5
+        + (prereqFit ? 14 : -14)
+        + (risk.totalCredits >= 15 && course.workload <= 4 ? 8 : 0);
+      return {
+        ...course,
+        score,
+        level: prereqFit ? "ok" : "warn",
+        reason: `${course.requirement}; ${course.credits} credits; workload ${course.workload}/10; ${prereqFit ? "prereqs fit" : "verify prereqs"}; keeps graduation path flexible.`
+      };
+    })
+    .sort((a, b) => b.score - a.score);
+}
+
+function exportAdvisorSummary() {
+  const semester = state.semesters[state.selectedSemester] || state.semesters[0];
+  const risk = calculateRisk(semester);
+  const breakdown = buildSemesterBreakdown(semester, risk);
+  const life = calculateLifeBalance(semester, breakdown, risk);
+  const prereqs = analyzePrerequisites();
+  const backups = rankBackupCourses(semester, breakdown, risk).slice(0, 4);
+  const plan = state.degreePlan;
+  const exportWindow = window.open("", "_blank");
+  if (!exportWindow) {
+    appendChatMessage("assistant", "Pop-up blocking stopped the advisor export. Allow pop-ups for this page and try again.");
+    return;
+  }
+
+  exportWindow.document.write(`
+    <!doctype html>
+    <html>
+      <head>
+        <title>DegreeWise Advisor Export</title>
+        <style>
+          body { font-family: Arial, sans-serif; color: #111827; margin: 32px; line-height: 1.45; }
+          h1, h2, h3 { margin: 0 0 8px; }
+          h1 { font-size: 28px; }
+          h2 { border-bottom: 1px solid #d1d5db; padding-bottom: 6px; margin-top: 24px; }
+          .meta, .grid { display: grid; gap: 8px; }
+          .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .box { border: 1px solid #d1d5db; border-radius: 8px; padding: 12px; }
+          ul { margin-top: 8px; padding-left: 20px; }
+          table { border-collapse: collapse; width: 100%; margin-top: 8px; }
+          th, td { border: 1px solid #d1d5db; padding: 7px; text-align: left; font-size: 12px; }
+          th { background: #f3f4f6; }
+          @media print { button { display: none; } body { margin: 18mm; } }
+        </style>
+      </head>
+      <body>
+        <button onclick="window.print()">Save as PDF</button>
+        <h1>DegreeWise Advisor Summary</h1>
+        <p>${escapeHtml(currentUniversity())} | ${escapeHtml(document.querySelector("#major")?.value || "Major pending")} | Credits completed: ${escapeHtml(document.querySelector("#creditsCompleted")?.value || "0")}</p>
+        <div class="grid">
+          <div class="box"><strong>Burnout:</strong> ${risk.score}% (${escapeHtml(risk.label)})<br>${escapeHtml(burnoutScoreExplanation(risk, breakdown))}</div>
+          <div class="box"><strong>Campus-life balance:</strong> ${life.score}% (${escapeHtml(life.label)})<br>${escapeHtml(life.reasons[0] || "")}</div>
+        </div>
+        <h2>Current Semester: ${escapeHtml(semester.title || "Current Plan")}</h2>
+        ${advisorCourseTable(semester.courses || [])}
+        <h2>Structured Burnout Reasons</h2>
+        <ul>${(breakdown.reasons || []).map((reason) => `<li>${escapeHtml(reason.label)}: ${escapeHtml(reason.detail)}</li>`).join("")}</ul>
+        <h2>Prerequisite Warnings</h2>
+        <ul>${(prereqs.length ? prereqs : [{ course: "OK", message: "No visible prerequisite conflicts." }]).map((item) => `<li>${escapeHtml(item.course)}: ${escapeHtml(item.message)}</li>`).join("")}</ul>
+        <h2>Backup Course Options</h2>
+        <ul>${backups.map((item) => `<li>${escapeHtml(item.code)} - ${escapeHtml(item.title)}: ${escapeHtml(item.reason)}</li>`).join("")}</ul>
+        <h2>4-Year Degree Map</h2>
+        ${advisorDegreePlanTable(plan)}
+        <h2>Advisor Questions</h2>
+        <ul>
+          <li>Are the prerequisite assumptions correct for my catalog year?</li>
+          <li>Which gen eds double-count with my program or scholarship requirements?</li>
+          <li>Can any high-load semester be moved without delaying graduation?</li>
+          <li>Are the backup courses actually available next term?</li>
+        </ul>
+      </body>
+    </html>
+  `);
+  exportWindow.document.close();
+  exportWindow.focus();
+}
+
+function buildBurnoutReasons(scores, risk, classDetails) {
+  const reasons = [];
+  const addReason = (label, value, detail) => {
+    const level = value >= 8 ? "high" : value >= 6 ? "medium" : "low";
+    reasons.push({ label, value, level, detail });
+  };
+
+  addReason("Credit load", scores.creditLoad || 1, `${risk.totalCredits || 0} credits is ${risk.totalCredits >= 16 ? "above" : "near"} the usual comfort range.`);
+  addReason("Technical load", scores.subject || 1, `${classDetails.filter((item) => ["CS", "CY", "MA"].includes((item.code || "").split(" ")[0])).length} technical or quantitative courses are in the term.`);
+  addReason("Labs/projects", scores.labsProjects || 1, `Project and lab pressure is ${scoreBand(scores.labsProjects)}.`);
+  addReason("Professor difficulty", scores.professor || 1, `Instructor difficulty average is ${risk.difficultyAverage?.toFixed?.(1) || "pending"}/5.`);
+  addReason("Reading/writing", Math.max(scores.reading || 1, scores.writing || 1), `Reading is ${scores.reading}/10 and writing is ${scores.writing}/10.`);
+
+  return reasons.sort((a, b) => b.value - a.value).slice(0, 5);
+}
+
+function checkItem(text, level = "info") {
+  const item = document.createElement("div");
+  item.className = `check-item ${level}`;
+  item.textContent = text;
+  return item;
+}
+
+function courseMeetingInfo(course) {
+  const start = parseTimeToMinutes(course.startTime) ?? parseTimeToMinutesFromText(course.courseInfo?.time);
+  if (start === null) {
+    return null;
+  }
+  const days = expandMeetingDays(course.days || course.courseInfo?.days || "");
+  return {
+    start,
+    end: start + 75,
+    days: days.length ? days : ["TBD"]
+  };
+}
+
+function groupMeetingsByDay(meetings) {
+  return meetings.reduce((groups, meeting) => {
+    meeting.days.forEach((day) => {
+      groups[day] = groups[day] || [];
+      groups[day].push(meeting);
+    });
+    return groups;
+  }, {});
+}
+
+function expandMeetingDays(value) {
+  const text = String(value || "").toUpperCase();
+  if (!text) {
+    return [];
+  }
+  if (text.includes("TTH") || text.includes("TR")) {
+    return ["Tue", "Thu"];
+  }
+  const days = [];
+  if (text.includes("M")) days.push("Mon");
+  if (text.includes("T")) days.push("Tue");
+  if (text.includes("W")) days.push("Wed");
+  if (text.includes("R") || text.includes("H")) days.push("Thu");
+  if (text.includes("F")) days.push("Fri");
+  return [...new Set(days)];
+}
+
+function timeValueFromCourse(course) {
+  const minutes = parseTimeToMinutesFromText(course.courseInfo?.time);
+  if (minutes === null) {
+    return "";
+  }
+  const hours = String(Math.floor(minutes / 60)).padStart(2, "0");
+  const mins = String(minutes % 60).padStart(2, "0");
+  return `${hours}:${mins}`;
+}
+
+function parseTimeToMinutes(value) {
+  if (!value) {
+    return null;
+  }
+  const match = String(value).match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) {
+    return null;
+  }
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+function parseTimeToMinutesFromText(value) {
+  const text = String(value || "");
+  const match = text.match(/(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?/i);
+  if (!match) {
+    return null;
+  }
+  let hours = Number(match[1]);
+  const minutes = Number(match[2] || 0);
+  const suffix = (match[3] || "").toUpperCase();
+  if (suffix === "PM" && hours < 12) hours += 12;
+  if (suffix === "AM" && hours === 12) hours = 0;
+  return hours * 60 + minutes;
+}
+
+function plannedCourseEntries() {
+  const entries = [];
+  if (state.degreePlan?.semesters?.length) {
+    state.degreePlan.semesters.forEach((semester, semesterIndex) => {
+      (semester.courses || []).forEach((course) => {
+        entries.push({
+          code: normalizeCourseKey(course.code || course.title),
+          title: course.title || course.name || "",
+          prerequisites: course.prerequisites || "",
+          term: semester.term || `Semester ${semesterIndex + 1}`,
+          order: semesterIndex
+        });
+      });
+    });
+    return entries;
+  }
+
+  state.semesters.forEach((semester, semesterIndex) => {
+    (semester.courses || []).forEach((course) => {
+      entries.push({
+        code: normalizeCourseKey(course.courseInfo?.code || extractDisplayedCourseCode(course.name) || course.name),
+        title: course.courseInfo?.title || course.name,
+        prerequisites: course.courseInfo?.prerequisites || "",
+        term: semester.title || `Semester ${semesterIndex + 1}`,
+        order: semesterIndex
+      });
+    });
+  });
+  return entries;
+}
+
+function completedCourseCodes(entries) {
+  if (!state.degreePlan?.semesters?.length) {
+    return new Set();
+  }
+  const completedCredits = Number(document.querySelector("#creditsCompleted")?.value || 0);
+  const completed = new Set();
+  let creditTotal = 0;
+  for (const entry of entries) {
+    if (creditTotal >= completedCredits) {
+      break;
+    }
+    completed.add(normalizeCourseKey(entry.code));
+    creditTotal += 3;
+  }
+  return completed;
+}
+
+function mergePrerequisiteRules(staticRule, parsedRule) {
+  if (!staticRule && !parsedRule) {
+    return null;
+  }
+  return {
+    allOf: [...(staticRule?.allOf || []), ...(parsedRule?.allOf || [])],
+    anyOf: [...(staticRule?.anyOf || []), ...(parsedRule?.anyOf || [])]
+  };
+}
+
+function parsePrerequisiteText(text) {
+  const matches = String(text || "").match(/\b[A-Z]{2,4}\s*\d{3}[A-Z]?\b/g);
+  if (!matches?.length) {
+    return null;
+  }
+  const normalized = matches.map(normalizeCourseKey);
+  if (/\bor\b/i.test(text)) {
+    return { anyOf: normalized.map((code) => [code]) };
+  }
+  return { allOf: normalized };
+}
+
+function prerequisiteRuleSatisfied(rule, satisfied) {
+  const allMet = (rule.allOf || []).every((required) => satisfied.has(normalizeCourseKey(required)));
+  const anyMet = !rule.anyOf?.length || rule.anyOf.some((group) => group.every((required) => satisfied.has(normalizeCourseKey(required))));
+  return allMet && anyMet;
+}
+
+function normalizeCourseKey(value) {
+  const match = String(value || "").match(/\b[A-Z]{2,4}\s*\d{3}[A-Z]?\b/i);
+  return match ? match[0].toUpperCase().replace(/\s+/, " ") : String(value || "").trim().toUpperCase();
+}
+
+function normalizeSpaces(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function scoreBand(score) {
+  return score >= 8 ? "high" : score >= 6 ? "moderate" : "low";
+}
+
+function formatSigned(value) {
+  return `${value >= 0 ? "+" : ""}${value}`;
+}
+
+function graduationImpactSummary() {
+  const totalCourses = state.semesters.reduce((sum, semester) => sum + semester.courses.length, 0);
+  const emptyFutureTerms = state.semesters.slice(state.selectedSemester + 1).filter((semester) => !semester.courses.length).length;
+  if (emptyFutureTerms) {
+    return "graduation pacing still has open future space";
+  }
+  return `${totalCourses} planned courses remain on the map`;
+}
+
+function advisorCourseTable(courses) {
+  if (!courses?.length) {
+    return "<p>No current semester courses entered.</p>";
+  }
+  return `
+    <table>
+      <thead><tr><th>Course</th><th>Credits</th><th>Professor</th><th>Days</th><th>Start</th></tr></thead>
+      <tbody>
+        ${courses.map((course) => `
+          <tr>
+            <td>${escapeHtml(course.name || course.courseInfo?.name || "")}</td>
+            <td>${escapeHtml(course.credits || "")}</td>
+            <td>${escapeHtml(course.professor || "")}</td>
+            <td>${escapeHtml(course.days || course.courseInfo?.days || "")}</td>
+            <td>${escapeHtml(course.startTime || timeValueFromCourse(course) || "")}</td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  `;
+}
+
+function advisorDegreePlanTable(plan) {
+  if (!plan?.semesters?.length) {
+    return "<p>No 4-year degree map uploaded yet.</p>";
+  }
+  return `
+    <table>
+      <thead><tr><th>Term</th><th>Credits</th><th>Burnout</th><th>Courses</th></tr></thead>
+      <tbody>
+        ${plan.semesters.map((semester) => `
+          <tr>
+            <td>${escapeHtml(semester.term)}</td>
+            <td>${escapeHtml(semester.credits)}</td>
+            <td>${escapeHtml(semester.burnoutScore)}%</td>
+            <td>${escapeHtml((semester.courses || []).map((course) => course.code || course.title).join(", "))}</td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  `;
 }
 
 async function uploadDegreeMap(file) {
@@ -1250,6 +2006,29 @@ function generateScheduleAnswer(question) {
     return "Add a few classes first and I can analyze the schedule.";
   }
 
+  if (lower.includes("prereq") || lower.includes("prerequisite")) {
+    const warnings = analyzePrerequisites();
+    return warnings.length
+      ? warnings.slice(0, 3).map((warning) => `${warning.course}: ${warning.message}`).join(" | ")
+      : "I do not see prerequisite conflicts in the visible plan. Still verify catalog-specific rules with an advisor.";
+  }
+
+  if (lower.includes("backup") || lower.includes("alternative") || lower.includes("full") || lower.includes("unavailable")) {
+    const backups = rankBackupCourses(semester, breakdown, risk).slice(0, 3);
+    return backups.map((backup) => `${backup.code} - ${backup.title}: ${backup.reason}`).join(" | ");
+  }
+
+  if (lower.includes("life") || lower.includes("campus") || lower.includes("lunch") || lower.includes("commute") || lower.includes("balance")) {
+    const balance = calculateLifeBalance(semester, breakdown, risk);
+    return `Campus-life balance is ${balance.score}% (${balance.label}). Main reasons: ${balance.reasons.slice(0, 3).join(" | ")}`;
+  }
+
+  if (lower.includes("what if") || lower.includes("simulation") || lower.includes("simulate")) {
+    return state.simulationBase
+      ? "You are in a temporary simulation. Use Save to keep the changes or Discard to return to the original plan."
+      : "Start Simulation, then add, remove, move, or swap classes. DegreeWise will recalculate burnout, credits, prereqs, backups, and life balance before you save.";
+  }
+
   if (lower.includes("hard") || lower.includes("difficult") || lower.includes("tough")) {
     return `${hardest.course.name} currently looks hardest at ${hardest.classScore}/10. The biggest flags are subject difficulty ${hardest.scores.subject}/10 and labs/projects ${hardest.scores.labsProjects}/10.`;
   }
@@ -1523,7 +2302,19 @@ function buildAiSchedulePayload(semester, localRisk, breakdown) {
     },
     localRisk,
     breakdown: compactBreakdownForAi(breakdown),
-    degreePlan: degreePlanForAi()
+    degreePlan: degreePlanForAi(),
+    lifeBalance: calculateLifeBalance(semester, breakdown, localRisk),
+    prerequisiteWarnings: analyzePrerequisites(),
+    backupPlans: rankBackupCourses(semester, breakdown, localRisk).slice(0, 4).map((backup) => ({
+      code: backup.code,
+      title: backup.title,
+      reason: backup.reason,
+      score: Math.round(backup.score)
+    })),
+    simulation: {
+      active: Boolean(state.simulationBase),
+      events: state.simulationEvents
+    }
   };
 }
 
