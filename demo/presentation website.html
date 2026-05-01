@@ -1,0 +1,1216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DegreeWise — AI Academic Advisor</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-deep: #050a14;
+      --bg-card: #0d1424;
+      --bg-card-hover: #141e32;
+      --cyan: #00e5ff;
+      --blue: #3b9eff;
+      --violet: #a369ff;
+      --green: #00ff88;
+      --amber: #ffaa00;
+      --red: #ff4466;
+      --text-primary: #ffffff;
+      --text-secondary: #8899aa;
+      --glow-cyan: rgba(0, 229, 255, 0.4);
+      --glow-violet: rgba(163, 105, 255, 0.3);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg-deep);
+      color: var(--text-primary);
+      overflow: hidden;
+    }
+
+    h1, h2, h3, .font-display {
+      font-family: 'Space Grotesk', sans-serif;
+    }
+
+    .slide {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 2rem;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.6s ease, transform 0.6s ease;
+      transform: translateX(60px);
+      overflow-y: auto;
+    }
+
+    .slide.active {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateX(0);
+    }
+
+    .slide.exit {
+      opacity: 0;
+      transform: translateX(-60px);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .slide {
+        transition: opacity 0.3s ease;
+        transform: none !important;
+      }
+    }
+
+    .gradient-bg {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      background: 
+        radial-gradient(ellipse 80% 50% at 20% 20%, rgba(0, 229, 255, 0.08) 0%, transparent 50%),
+        radial-gradient(ellipse 60% 40% at 80% 80%, rgba(163, 105, 255, 0.06) 0%, transparent 50%),
+        linear-gradient(180deg, var(--bg-deep) 0%, #0a1020 100%);
+    }
+
+    .glow-box {
+      position: relative;
+    }
+
+    .glow-box::before {
+      content: '';
+      position: absolute;
+      inset: -2px;
+      border-radius: inherit;
+      padding: 2px;
+      background: linear-gradient(135deg, var(--cyan), var(--violet));
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      opacity: 0.6;
+    }
+
+    .stat-card {
+      background: var(--bg-card);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 16px;
+      padding: 1.5rem;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 32px rgba(0, 229, 255, 0.15);
+    }
+
+    .feature-card {
+      background: var(--bg-card);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 20px;
+      padding: 1.5rem;
+      transition: all 0.3s ease;
+    }
+
+    .feature-card:hover {
+      border-color: rgba(0, 229, 255, 0.3);
+      box-shadow: 0 4px 24px rgba(0, 229, 255, 0.1);
+    }
+
+    .warning-card {
+      background: rgba(255, 68, 102, 0.1);
+      border: 1px solid rgba(255, 68, 102, 0.3);
+      color: var(--red);
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .phone-mockup {
+      background: linear-gradient(145deg, #1a2235 0%, #0d1424 100%);
+      border-radius: 32px;
+      padding: 12px;
+      box-shadow: 
+        0 20px 60px rgba(0,0,0,0.5),
+        0 0 120px var(--glow-cyan),
+        inset 0 1px 0 rgba(255,255,255,0.1);
+    }
+
+    .phone-screen {
+      background: var(--bg-deep);
+      border-radius: 24px;
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--cyan), var(--violet));
+      transition: width 0.3s ease;
+      z-index: 100;
+    }
+
+    .nav-dots {
+      position: fixed;
+      right: 1.5rem;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 50;
+    }
+
+    .nav-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.2);
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .nav-dot.active {
+      background: var(--cyan);
+      box-shadow: 0 0 12px var(--glow-cyan);
+    }
+
+    .nav-dot:hover {
+      background: rgba(255,255,255,0.4);
+    }
+
+    .slide-counter {
+      position: fixed;
+      bottom: 1.5rem;
+      left: 1.5rem;
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      font-family: 'Space Grotesk', monospace;
+      z-index: 50;
+    }
+
+    .flow-step {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 0.75rem;
+    }
+
+    .flow-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-card);
+      border: 1px solid rgba(0, 229, 255, 0.2);
+    }
+
+    .flow-arrow {
+      color: var(--text-secondary);
+      flex-shrink: 0;
+    }
+
+    .before-after-table {
+      display: grid;
+      gap: 0.5rem;
+    }
+
+    .before-after-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      align-items: center;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      padding: 0.25rem 0.75rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .badge-live {
+      background: rgba(0, 255, 136, 0.15);
+      color: var(--green);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0px) rotate(0deg); }
+      50% { transform: translateY(-10px) rotate(2deg); }
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .animate-in {
+      animation: fadeInUp 0.5s ease forwards;
+    }
+
+    .delay-1 { animation-delay: 0.1s; opacity: 0; }
+    .delay-2 { animation-delay: 0.2s; opacity: 0; }
+    .delay-3 { animation-delay: 0.3s; opacity: 0; }
+    .delay-4 { animation-delay: 0.4s; opacity: 0; }
+    .delay-5 { animation-delay: 0.5s; opacity: 0; }
+    .delay-6 { animation-delay: 0.6s; opacity: 0; }
+
+    .chaos-card {
+      animation: float 4s ease-in-out infinite;
+    }
+
+    .chaos-card:nth-child(2) { animation-delay: 0.5s; }
+    .chaos-card:nth-child(3) { animation-delay: 1s; }
+    .chaos-card:nth-child(4) { animation-delay: 1.5s; }
+    .chaos-card:nth-child(5) { animation-delay: 2s; }
+    .chaos-card:nth-child(6) { animation-delay: 2.5s; }
+
+    .key-hint {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      display: flex;
+      gap: 0.5rem;
+      z-index: 50;
+    }
+
+    .key {
+      background: var(--bg-card);
+      border: 1px solid rgba(255,255,255,0.1);
+      padding: 0.25rem 0.5rem;
+      border-radius: 6px;
+      font-size: 0.625rem;
+      color: var(--text-secondary);
+      font-family: 'Space Grotesk', monospace;
+    }
+
+    @media (max-width: 768px) {
+      .slide {
+        padding: 1rem;
+        padding-bottom: 4rem;
+      }
+      
+      .nav-dots {
+        bottom: 1rem;
+        top: auto;
+        right: 50%;
+        transform: translateX(50%);
+        flex-direction: row;
+      }
+
+      .key-hint {
+        display: none;
+      }
+
+      .phone-mockup {
+        max-width: 180px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="gradient-bg"></div>
+  <div class="progress-bar" id="progressBar"></div>
+
+  <div class="nav-dots" id="navDots"></div>
+  <div class="slide-counter" id="slideCounter">01 / 11</div>
+  <div class="key-hint">
+    <span class="key">Arrow Keys</span>
+    <span class="key">Space</span>
+  </div>
+
+  <!-- Slide 1: Title -->
+  <div class="slide active" id="slide1">
+    <div class="max-w-6xl mx-auto w-full grid lg:grid-cols-2 gap-8 lg:gap-16 items-center">
+      <div class="space-y-6">
+        <h1 class="text-5xl md:text-7xl font-bold tracking-tight animate-in">
+          <span style="color: var(--cyan)">Degree</span><span style="color: var(--violet)">Wise</span>
+        </h1>
+        <p class="text-xl md:text-2xl font-medium animate-in delay-1" style="color: var(--text-secondary)">
+          The AI Academic Advisor in Every Student's Pocket
+        </p>
+        <p class="text-base md:text-lg animate-in delay-2" style="color: var(--text-secondary)">
+          Because "just figure out your degree plan" should not be a survival mission.
+        </p>
+        <div class="flex flex-wrap gap-3 pt-4 animate-in delay-3">
+          <span class="badge" style="background: rgba(0, 229, 255, 0.1); color: var(--cyan);">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20"/></svg>
+            Burnout Score
+          </span>
+          <span class="badge" style="background: rgba(163, 105, 255, 0.1); color: var(--violet);">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+            4-Year Plan
+          </span>
+          <span class="badge" style="background: rgba(0, 255, 136, 0.1); color: var(--green);">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 3h5v5M21 3l-7 7"/></svg>
+            Advisor Export
+          </span>
+        </div>
+        
+        <!-- Team Info -->
+        <div class="pt-8 mt-4 border-t animate-in delay-4" style="border-color: rgba(255,255,255,0.1);">
+          <p class="text-xs uppercase tracking-widest mb-2" style="color: var(--cyan);">Presented by Team XYZ</p>
+          <p class="text-sm" style="color: var(--text-secondary);">
+            <span class="font-medium" style="color: rgba(255,255,255,0.8);">Roy David Kakwenga</span> 
+            <span class="mx-2 opacity-40">&</span> 
+            <span class="font-medium" style="color: rgba(255,255,255,0.8);">Ana Carolina Yamakawa</span>
+          </p>
+        </div>
+      </div>
+      <div class="flex justify-center animate-in delay-5">
+        <div class="phone-mockup" style="box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 100px var(--glow-cyan), 0 0 60px var(--glow-violet);">
+          <div class="phone-screen w-48 md:w-56">
+            <div class="p-4 space-y-3">
+              <div class="flex justify-between items-center">
+                <span class="text-xs font-semibold" style="color: var(--cyan)">DegreeWise</span>
+                <span class="text-xs" style="color: var(--text-secondary)">Fall 2025</span>
+              </div>
+              <div class="p-3 rounded-xl" style="background: rgba(0, 229, 255, 0.08); border: 1px solid rgba(0, 229, 255, 0.2);">
+                <div class="text-xs mb-1" style="color: var(--text-secondary)">Burnout Score</div>
+                <div class="text-2xl font-bold" style="color: var(--cyan)">42<span class="text-sm font-normal">/100</span></div>
+                <div class="text-xs mt-1" style="color: var(--green)">Low Risk</div>
+              </div>
+              <div class="space-y-2">
+                <div class="p-2 rounded-lg" style="background: var(--bg-card)">
+                  <div class="text-xs font-medium">CS 265</div>
+                  <div class="text-xs" style="color: var(--text-secondary)">Data Structures</div>
+                </div>
+                <div class="p-2 rounded-lg" style="background: var(--bg-card)">
+                  <div class="text-xs font-medium">MATH 230</div>
+                  <div class="text-xs" style="color: var(--text-secondary)">Calculus III</div>
+                </div>
+                <div class="p-2 rounded-lg" style="background: var(--bg-card)">
+                  <div class="text-xs font-medium">ENG 102</div>
+                  <div class="text-xs" style="color: var(--text-secondary)">Composition</div>
+                </div>
+              </div>
+              <div class="p-2 rounded-lg text-center" style="background: rgba(163, 105, 255, 0.1); border: 1px solid rgba(163, 105, 255, 0.2);">
+                <div class="text-xs" style="color: var(--violet)">4-Year Plan</div>
+                <div class="text-xs" style="color: var(--text-secondary)">Unlock with school license</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 2: Problem -->
+  <div class="slide" id="slide2">
+    <div class="max-w-5xl mx-auto w-full text-center space-y-8">
+      <h2 class="text-3xl md:text-5xl font-bold tracking-tight">Students Are Planning Blind</h2>
+      <p class="text-lg md:text-xl max-w-2xl mx-auto" style="color: var(--text-secondary)">
+        Registration season is basically the Hunger Games, but with prerequisites.
+      </p>
+      
+      <div class="relative h-64 md:h-80 flex items-center justify-center">
+        <!-- Center student icon -->
+        <div class="absolute z-10">
+          <div class="w-20 h-20 md:w-24 md:h-24 rounded-full flex items-center justify-center" style="background: var(--bg-card); border: 2px solid var(--cyan); box-shadow: 0 0 30px var(--glow-cyan);">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+          </div>
+        </div>
+        
+        <!-- Floating warning cards -->
+        <div class="warning-card absolute chaos-card" style="top: 5%; left: 10%; transform: rotate(-8deg);">Prereq Missing</div>
+        <div class="warning-card absolute chaos-card" style="top: 15%; right: 15%; transform: rotate(6deg);">Class Full</div>
+        <div class="warning-card absolute chaos-card" style="top: 55%; left: 5%; transform: rotate(-4deg);">17 Credits</div>
+        <div class="warning-card absolute chaos-card" style="bottom: 10%; left: 20%; transform: rotate(10deg);">8 a.m. Lab</div>
+        <div class="warning-card absolute chaos-card" style="bottom: 5%; right: 10%; transform: rotate(-12deg);">Waitlist #24</div>
+        <div class="warning-card absolute chaos-card" style="top: 40%; right: 5%; transform: rotate(4deg);">Advisor Booked</div>
+      </div>
+      
+      <p class="text-base md:text-lg italic" style="color: var(--text-secondary)">
+        One bad semester plan can turn into academic side quests nobody asked for.
+      </p>
+    </div>
+  </div>
+
+  <!-- Slide 3: Big Stats -->
+  <div class="slide" id="slide3">
+    <div class="max-w-5xl mx-auto w-full space-y-8">
+      <div class="text-center space-y-3">
+        <h2 class="text-3xl md:text-5xl font-bold tracking-tight">The Planning Gap Is Real</h2>
+        <p class="text-lg" style="color: var(--text-secondary)">This is not just student procrastination. The system is overloaded.</p>
+      </div>
+      
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div class="stat-card text-center col-span-1">
+          <div class="text-3xl md:text-4xl font-bold" style="color: var(--cyan)">399:1</div>
+          <div class="text-xs mt-2" style="color: var(--text-secondary)">Student-to-Advisor Ratio</div>
+        </div>
+        <div class="stat-card text-center col-span-1">
+          <div class="text-3xl md:text-4xl font-bold" style="color: var(--blue)">64%</div>
+          <div class="text-xs mt-2" style="color: var(--text-secondary)">6-Year Graduation Rate</div>
+        </div>
+        <div class="stat-card text-center col-span-1">
+          <div class="text-3xl md:text-4xl font-bold" style="color: var(--red)">36%</div>
+          <div class="text-xs mt-2" style="color: var(--text-secondary)">Did Not Complete</div>
+        </div>
+        <div class="stat-card text-center col-span-1">
+          <div class="text-3xl md:text-4xl font-bold" style="color: var(--amber)">30%</div>
+          <div class="text-xs mt-2" style="color: var(--text-secondary)">Anxiety Affecting Academics</div>
+        </div>
+        <div class="stat-card text-center col-span-2 md:col-span-1">
+          <div class="text-3xl md:text-4xl font-bold" style="color: var(--violet)">1 in 4+</div>
+          <div class="text-xs mt-2" style="color: var(--text-secondary)">Needed Class Full/Unavailable</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 4: Solution -->
+  <div class="slide" id="slide4">
+    <div class="max-w-5xl mx-auto w-full space-y-8">
+      <div class="text-center space-y-3">
+        <h2 class="text-3xl md:text-5xl font-bold tracking-tight">Meet DegreeWise</h2>
+        <p class="text-lg max-w-2xl mx-auto" style="color: var(--text-secondary)">
+          It's like Google Maps for your degree, but it also warns you when the route is emotionally dangerous.
+        </p>
+      </div>
+      
+      <div class="grid md:grid-cols-2 gap-6">
+        <!-- Before -->
+        <div class="p-6 rounded-2xl" style="background: rgba(255, 68, 102, 0.05); border: 1px solid rgba(255, 68, 102, 0.2);">
+          <div class="flex items-center gap-2 mb-4">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/></svg>
+            <span class="font-semibold" style="color: var(--red)">Before</span>
+          </div>
+          <ul class="space-y-3 text-sm" style="color: var(--text-secondary)">
+            <li class="flex items-center gap-3">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+              Confusing PDF degree maps
+            </li>
+            <li class="flex items-center gap-3">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
+              Guessing workload
+            </li>
+            <li class="flex items-center gap-3">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v18H3z"/><path d="M3 9h18M9 21V9"/></svg>
+              No backup plan
+            </li>
+            <li class="flex items-center gap-3">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              Unprepared advising
+            </li>
+          </ul>
+        </div>
+        
+        <!-- After -->
+        <div class="p-6 rounded-2xl" style="background: rgba(0, 255, 136, 0.05); border: 1px solid rgba(0, 255, 136, 0.2);">
+          <div class="flex items-center gap-2 mb-4">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>
+            <span class="font-semibold" style="color: var(--green)">With DegreeWise</span>
+          </div>
+          <ul class="space-y-3 text-sm">
+            <li class="flex items-center gap-3">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+              <span style="color: var(--cyan)">Interactive plan builder</span>
+            </li>
+            <li class="flex items-center gap-3">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+              <span style="color: var(--cyan)">Burnout Score analysis</span>
+            </li>
+            <li class="flex items-center gap-3">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><path d="M12 3v18M3 12h18"/></svg>
+              <span style="color: var(--cyan)">Backup plan generator</span>
+            </li>
+            <li class="flex items-center gap-3">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
+              <span style="color: var(--cyan)">Advisor-ready export</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 5: How It Works -->
+  <div class="slide" id="slide5">
+    <div class="max-w-5xl mx-auto w-full space-y-8">
+      <div class="text-center space-y-3">
+        <h2 class="text-3xl md:text-5xl font-bold tracking-tight">From Panic to Plan in Minutes</h2>
+        <p class="text-lg" style="color: var(--text-secondary)">
+          The student gets to break their schedule in simulation mode before real life does it for them.
+        </p>
+      </div>
+      
+      <div class="flex flex-wrap justify-center items-center gap-4 md:gap-2">
+        <div class="flow-step">
+          <div class="flow-icon" style="border-color: var(--cyan);">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+          </div>
+          <div class="text-sm font-semibold">Build</div>
+          <div class="text-xs" style="color: var(--text-secondary)">Add courses</div>
+        </div>
+        
+        <svg class="flow-arrow hidden md:block" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        
+        <div class="flow-step">
+          <div class="flow-icon" style="border-color: var(--blue);">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+          </div>
+          <div class="text-sm font-semibold">Analyze</div>
+          <div class="text-xs" style="color: var(--text-secondary)">AI reviews plan</div>
+        </div>
+        
+        <svg class="flow-arrow hidden md:block" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        
+        <div class="flow-step">
+          <div class="flow-icon" style="border-color: var(--violet);">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--violet)" stroke-width="2"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+          </div>
+          <div class="text-sm font-semibold">Simulate</div>
+          <div class="text-xs" style="color: var(--text-secondary)">Test changes</div>
+        </div>
+        
+        <svg class="flow-arrow hidden md:block" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        
+        <div class="flow-step">
+          <div class="flow-icon" style="border-color: var(--green);">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8M13 12h8M13 18h8"/></svg>
+          </div>
+          <div class="text-sm font-semibold">Improve</div>
+          <div class="text-xs" style="color: var(--text-secondary)">Get suggestions</div>
+        </div>
+        
+        <svg class="flow-arrow hidden md:block" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        
+        <div class="flow-step">
+          <div class="flow-icon" style="border-color: var(--amber);">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M12 18v-6M9 15l3 3 3-3"/></svg>
+          </div>
+          <div class="text-sm font-semibold">Export</div>
+          <div class="text-xs" style="color: var(--text-secondary)">Advisor-ready</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 6: Features -->
+  <div class="slide" id="slide6">
+    <div class="max-w-5xl mx-auto w-full space-y-6">
+      <div class="text-center space-y-3">
+        <h2 class="text-3xl md:text-4xl font-bold tracking-tight">The Features That Make It Useful</h2>
+        <p class="text-base" style="color: var(--text-secondary)">
+          Basically, the friend who says "Are you sure about that 8 a.m. lab with that professor?"
+        </p>
+      </div>
+      
+      <div class="grid md:grid-cols-2 gap-4">
+        <!-- Burnout Score -->
+        <div class="feature-card">
+          <div class="flex items-center gap-3 mb-3">
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background: rgba(0, 229, 255, 0.1);">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+            </div>
+            <span class="font-semibold">Burnout Score</span>
+          </div>
+          <div class="p-3 rounded-xl mb-3" style="background: var(--bg-deep);">
+            <div class="flex justify-between items-end mb-2">
+              <span class="text-3xl font-bold" style="color: var(--red)">82</span>
+              <span class="text-sm" style="color: var(--red)">High Risk</span>
+            </div>
+            <div class="h-2 rounded-full overflow-hidden" style="background: rgba(255,255,255,0.1);">
+              <div class="h-full rounded-full" style="width: 82%; background: linear-gradient(90deg, var(--green), var(--amber), var(--red));"></div>
+            </div>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <span class="text-xs px-2 py-1 rounded" style="background: rgba(255, 68, 102, 0.1); color: var(--red);">17 credits</span>
+            <span class="text-xs px-2 py-1 rounded" style="background: rgba(255, 68, 102, 0.1); color: var(--red);">3 technical</span>
+            <span class="text-xs px-2 py-1 rounded" style="background: rgba(255, 68, 102, 0.1); color: var(--red);">2 labs</span>
+          </div>
+        </div>
+        
+        <!-- What-If Simulator -->
+        <div class="feature-card">
+          <div class="flex items-center gap-3 mb-3">
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background: rgba(163, 105, 255, 0.1);">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--violet)" stroke-width="2"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+            </div>
+            <span class="font-semibold">What-If Simulator</span>
+          </div>
+          <div class="p-3 rounded-xl" style="background: var(--bg-deep);">
+            <div class="flex items-center gap-4">
+              <div class="text-center">
+                <div class="text-2xl font-bold" style="color: var(--red)">82</div>
+                <div class="text-xs" style="color: var(--text-secondary)">Before</div>
+              </div>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+              <div class="text-center">
+                <div class="text-2xl font-bold" style="color: var(--green)">61</div>
+                <div class="text-xs" style="color: var(--text-secondary)">After</div>
+              </div>
+            </div>
+            <div class="mt-2 text-xs text-center" style="color: var(--text-secondary);">
+              Move PHYS 201 to Spring semester
+            </div>
+          </div>
+        </div>
+        
+        <!-- Prerequisite Warnings -->
+        <div class="feature-card">
+          <div class="flex items-center gap-3 mb-3">
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background: rgba(255, 170, 0, 0.1);">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4M12 17h.01"/></svg>
+            </div>
+            <span class="font-semibold">Prerequisite Warnings</span>
+          </div>
+          <div class="p-3 rounded-xl space-y-2" style="background: var(--bg-deep);">
+            <div class="flex items-center gap-2 text-sm">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/></svg>
+              <span style="color: var(--red)">CS 350 appears before CS 265</span>
+            </div>
+            <div class="text-xs" style="color: var(--text-secondary);">
+              CS 350 requires CS 265 as a prerequisite. Move CS 265 to an earlier semester.
+            </div>
+          </div>
+        </div>
+        
+        <!-- Backup Generator -->
+        <div class="feature-card">
+          <div class="flex items-center gap-3 mb-3">
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background: rgba(0, 255, 136, 0.1);">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><path d="M12 3v18M3 12h18"/></svg>
+            </div>
+            <span class="font-semibold">Backup Plan Generator</span>
+          </div>
+          <div class="p-3 rounded-xl space-y-2" style="background: var(--bg-deep);">
+            <div class="text-xs mb-2" style="color: var(--text-secondary);">PHYS 201 is full. Alternatives:</div>
+            <div class="p-2 rounded-lg flex justify-between items-center" style="background: var(--bg-card);">
+              <div>
+                <div class="text-sm font-medium" style="color: var(--green)">HIST 120</div>
+                <div class="text-xs" style="color: var(--text-secondary);">World History</div>
+              </div>
+              <span class="text-xs px-2 py-1 rounded" style="background: rgba(0, 255, 136, 0.1); color: var(--green);">Best fit</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 7: Business Model -->
+  <div class="slide" id="slide7">
+    <div class="max-w-5xl mx-auto w-full space-y-8">
+      <div class="text-center space-y-3">
+        <h2 class="text-3xl md:text-5xl font-bold tracking-tight">Free for Students. Valuable for Schools.</h2>
+        <p class="text-lg" style="color: var(--text-secondary)">
+          Students get help. Schools get better-prepared students. Advisors get cleaner meetings.
+        </p>
+      </div>
+      
+      <div class="grid md:grid-cols-3 gap-6">
+        <!-- Free Tier -->
+        <div class="p-6 rounded-2xl" style="background: var(--bg-card); border: 1px solid rgba(0, 229, 255, 0.2);">
+          <div class="text-xs font-semibold mb-4" style="color: var(--cyan)">FREE FOR STUDENTS</div>
+          <ul class="space-y-3 text-sm">
+            <li class="flex items-center gap-2">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>
+              Semester planning
+            </li>
+            <li class="flex items-center gap-2">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>
+              Burnout scoring
+            </li>
+            <li class="flex items-center gap-2">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>
+              Basic simulation
+            </li>
+            <li class="flex items-center gap-2">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>
+              Non-intrusive ads
+            </li>
+            <li class="flex items-center gap-2">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>
+              No account required
+            </li>
+          </ul>
+        </div>
+        
+        <!-- Locked Feature -->
+        <div class="p-6 rounded-2xl" style="background: var(--bg-card); border: 1px solid rgba(163, 105, 255, 0.3);">
+          <div class="flex items-center gap-2 mb-4">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--violet)" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <span class="text-xs font-semibold" style="color: var(--violet)">PREMIUM</span>
+          </div>
+          <div class="p-4 rounded-xl text-center" style="background: rgba(163, 105, 255, 0.1);">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--violet)" stroke-width="2" class="mx-auto mb-2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <div class="font-semibold">4-Year Plan</div>
+            <div class="text-xs mt-1" style="color: var(--text-secondary);">Unlock with school license</div>
+          </div>
+          <div class="mt-4 text-xs" style="color: var(--text-secondary);">
+            Creates student demand for institutional adoption.
+          </div>
+        </div>
+        
+        <!-- School Integration -->
+        <div class="p-6 rounded-2xl" style="background: var(--bg-card); border: 1px solid rgba(0, 255, 136, 0.2);">
+          <div class="text-xs font-semibold mb-4" style="color: var(--green)">SCHOOL INTEGRATION</div>
+          <ul class="space-y-3 text-sm">
+            <li class="flex items-center gap-2">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><path d="M12 2v20M2 12h20"/></svg>
+              Campus licensing
+            </li>
+            <li class="flex items-center gap-2">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><path d="M12 2v20M2 12h20"/></svg>
+              Department templates
+            </li>
+            <li class="flex items-center gap-2">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><path d="M12 2v20M2 12h20"/></svg>
+              Advisor workflow tools
+            </li>
+            <li class="flex items-center gap-2">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><path d="M12 2v20M2 12h20"/></svg>
+              Orientation support
+            </li>
+            <li class="flex items-center gap-2">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><path d="M12 2v20M2 12h20"/></svg>
+              School branding
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 8: ROI / Unit Economics -->
+  <div class="slide" id="slide8">
+    <div class="max-w-5xl mx-auto w-full space-y-8">
+      <div class="text-center space-y-3">
+        <h2 class="text-3xl md:text-5xl font-bold tracking-tight">Low Cost. High Margin. Scalable.</h2>
+        <p class="text-lg" style="color: var(--text-secondary);">
+          Software economics, not service economics. Built for scale from day one.
+        </p>
+      </div>
+      
+      <div class="grid md:grid-cols-2 gap-6 items-center">
+        <!-- Cost vs Revenue Comparison -->
+        <div class="p-6 rounded-2xl space-y-6" style="background: var(--bg-card);">
+          <div class="text-sm font-semibold" style="color: var(--cyan)">Unit Economics</div>
+          
+          <!-- Minimal Cost -->
+          <div class="space-y-2">
+            <div class="flex justify-between text-sm">
+              <span style="color: var(--text-secondary)">Operational Cost</span>
+              <span style="color: var(--amber)">Minimal</span>
+            </div>
+            <div class="h-3 rounded-full overflow-hidden" style="background: rgba(255,255,255,0.1);">
+              <div class="h-full rounded-full" style="width: 18%; background: var(--amber);"></div>
+            </div>
+            <div class="text-xs" style="color: var(--text-secondary);">No inventory. Automated infra. Low support.</div>
+          </div>
+          
+          <!-- High ARR -->
+          <div class="space-y-2">
+            <div class="flex justify-between text-sm">
+              <span style="color: var(--text-secondary)">Annual Recurring Revenue</span>
+              <span style="color: var(--green)">High</span>
+            </div>
+            <div class="h-3 rounded-full overflow-hidden" style="background: rgba(255,255,255,0.1);">
+              <div class="h-full rounded-full" style="width: 100%; background: linear-gradient(90deg, var(--cyan), var(--green));"></div>
+            </div>
+            <div class="text-xs" style="color: var(--text-secondary);">Per-seat or site licensing. Predictable income.</div>
+          </div>
+        </div>
+        
+        <!-- Margin Callout -->
+        <div class="p-8 rounded-2xl text-center" style="background: linear-gradient(145deg, rgba(0, 229, 255, 0.05), rgba(163, 105, 255, 0.05)); border: 1px solid rgba(0, 255, 136, 0.2);">
+          <div class="text-xs font-semibold mb-2" style="color: var(--text-secondary);">GROSS MARGIN</div>
+          <div class="text-6xl md:text-7xl font-bold" style="color: var(--green);">80%<span class="text-3xl align-top">+</span></div>
+          <div class="mt-4 text-sm" style="color: var(--text-secondary);">
+            Standard SaaS efficiency
+          </div>
+          <div class="mt-4 pt-4 border-t" style="border-color: rgba(255,255,255,0.1);">
+            <p class="text-xs" style="color: var(--text-secondary);">
+              Margins improve as user base grows. Infrastructure costs stay flat.
+            </p>
+          </div>
+        </div>
+      </div>
+      
+      <div class="text-xs text-center" style="color: var(--text-secondary);">
+        Scalable revenue model with predictable unit economics.
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 9: S&P 500 Comparison -->
+  <div class="slide" id="slide9">
+    <div class="max-w-5xl mx-auto w-full space-y-8">
+      <div class="text-center space-y-3">
+        <h2 class="text-3xl md:text-5xl font-bold tracking-tight">An Asymmetric Investment Vehicle</h2>
+        <p class="text-lg max-w-2xl mx-auto" style="color: var(--text-secondary)">
+          Why invest in DegreeWise? Our SaaS model mathematically outpaces traditional indexes by 30%+, with lower maintenance and risk.
+        </p>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-6 items-stretch mt-8">
+        <!-- The S&P 500 Benchmark -->
+        <div class="feature-card relative overflow-hidden flex flex-col justify-between" style="border-color: rgba(255, 170, 0, 0.3);">
+          <div class="absolute -right-10 -top-10 w-40 h-40 rounded-full" style="background: rgba(255, 170, 0, 0.1); filter: blur(30px);"></div>
+          <div class="relative z-10">
+            <div class="flex items-center gap-3 mb-4">
+              <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background: rgba(255, 170, 0, 0.1);">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+              </div>
+              <h3 class="text-xl font-bold" style="color: var(--amber)">The S&P 500 Benchmark</h3>
+            </div>
+            <p class="text-sm mb-6" style="color: var(--text-secondary)">The standard for passive investing, but highly exposed to broad economic volatility and market cycles.</p>
+            
+            <div class="space-y-3 text-sm">
+              <div class="flex justify-between items-center border-b pb-2" style="border-color: rgba(255,255,255,0.06);">
+                <span style="color: var(--text-secondary)">Average Annual ROI</span>
+                <span class="font-mono font-medium" style="color: var(--amber)">~10%</span>
+              </div>
+              <div class="flex justify-between items-center border-b pb-2" style="border-color: rgba(255,255,255,0.06);">
+                <span style="color: var(--text-secondary)">Market Risk</span>
+                <span class="font-mono font-medium" style="color: var(--red)">High (Macro Volatility)</span>
+              </div>
+              <div class="flex justify-between items-center pt-1">
+                <span style="color: var(--text-secondary)">Asset Type</span>
+                <span class="font-mono font-medium">Equities</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- The DegreeWise Advantage -->
+        <div class="feature-card relative overflow-hidden flex flex-col justify-between" style="border-color: rgba(0, 255, 136, 0.3);">
+          <div class="absolute -left-10 -bottom-10 w-40 h-40 rounded-full" style="background: rgba(0, 255, 136, 0.1); filter: blur(30px);"></div>
+          <div class="relative z-10">
+             <div class="flex items-center gap-3 mb-4">
+              <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background: rgba(0, 255, 136, 0.1);">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+              </div>
+              <h3 class="text-xl font-bold" style="color: var(--green)">DegreeWise SaaS</h3>
+            </div>
+            <p class="text-sm mb-4" style="color: var(--text-secondary)">A recession-resistant software asset. The captive higher-ed market guarantees low churn and steady ARR.</p>
+            
+            <div class="p-4 rounded-xl flex items-end justify-center gap-8 h-36 mt-4" style="background: var(--bg-deep);">
+              <!-- S&P 500 Bar -->
+              <div class="flex flex-col items-center gap-2 w-20">
+                <div class="text-xs font-mono font-medium text-white/50">S&P 500</div>
+                <div class="w-full rounded-t-md relative flex items-end justify-center pb-2 transition-all duration-1000" style="height: 40px; background: rgba(255,255,255,0.1);">
+                  <span class="text-xs font-bold text-white/70">10%</span>
+                </div>
+              </div>
+              
+              <!-- DegreeWise Bar -->
+              <div class="flex flex-col items-center gap-2 w-24">
+                <div class="text-xs font-mono font-medium" style="color: var(--green)">DegreeWise</div>
+                <div class="w-full rounded-t-md relative flex items-start justify-center pt-3 transition-all duration-1000 delay-300" style="height: 100px; background: linear-gradient(180deg, var(--green), rgba(0, 255, 136, 0.2)); box-shadow: 0 0 20px rgba(0, 255, 136, 0.2);">
+                  <div class="absolute -top-3 px-2 py-0.5 rounded text-[10px] font-bold bg-white text-black shadow-lg">
+                    +30% Spread
+                  </div>
+                  <span class="text-sm font-bold text-white">40%+ ROI</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Risk vs Maintenance Footer -->
+      <div class="p-4 rounded-2xl grid grid-cols-3 gap-4 text-center border" style="background: rgba(0, 255, 136, 0.05); border-color: rgba(0, 255, 136, 0.2);">
+        <div class="text-sm border-r border-white/10 px-2">
+          <span class="block mb-1 text-xs uppercase tracking-wider" style="color: var(--text-secondary)">Maintenance</span>
+          <span class="font-bold" style="color: var(--green)">Automated SaaS Infra</span>
+        </div>
+        <div class="text-sm border-r border-white/10 px-2">
+          <span class="block mb-1 text-xs uppercase tracking-wider" style="color: var(--text-secondary)">Downside Risk</span>
+          <span class="font-bold" style="color: var(--green)">Recession-Resistant</span>
+        </div>
+        <div class="text-sm px-2">
+          <span class="block mb-1 text-xs uppercase tracking-wider" style="color: var(--text-secondary)">Scalability</span>
+          <span class="font-bold" style="color: var(--green)">Zero Marginal Cost</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 10: Demo Roadmap -->
+  <div class="slide" id="slide10">
+    <div class="max-w-4xl mx-auto w-full space-y-8">
+      <div class="text-center space-y-3">
+        <h2 class="text-3xl md:text-5xl font-bold tracking-tight">Live Demo: Watch the Plan Get Smarter</h2>
+        <p class="text-lg" style="color: var(--text-secondary)">
+          No fake "imagine this works" moment. You can try it right now.
+        </p>
+      </div>
+      
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div class="p-4 rounded-xl text-center" style="background: var(--bg-card); border: 1px solid rgba(0, 229, 255, 0.2);">
+          <div class="w-8 h-8 rounded-lg mx-auto mb-2 flex items-center justify-center" style="background: rgba(0, 229, 255, 0.1);">
+            <span class="text-xs font-bold" style="color: var(--cyan);">1</span>
+          </div>
+          <div class="text-xs font-medium">Open App</div>
+        </div>
+        <div class="p-4 rounded-xl text-center" style="background: var(--bg-card); border: 1px solid rgba(59, 158, 255, 0.2);">
+          <div class="w-8 h-8 rounded-lg mx-auto mb-2 flex items-center justify-center" style="background: rgba(59, 158, 255, 0.1);">
+            <span class="text-xs font-bold" style="color: var(--blue);">2</span>
+          </div>
+          <div class="text-xs font-medium">Build Schedule</div>
+        </div>
+        <div class="p-4 rounded-xl text-center" style="background: var(--bg-card); border: 1px solid rgba(255, 170, 0, 0.2);">
+          <div class="w-8 h-8 rounded-lg mx-auto mb-2 flex items-center justify-center" style="background: rgba(255, 170, 0, 0.1);">
+            <span class="text-xs font-bold" style="color: var(--amber);">3</span>
+          </div>
+          <div class="text-xs font-medium">Burnout Score</div>
+        </div>
+        <div class="p-4 rounded-xl text-center" style="background: var(--bg-card); border: 1px solid rgba(163, 105, 255, 0.2);">
+          <div class="w-8 h-8 rounded-lg mx-auto mb-2 flex items-center justify-center" style="background: rgba(163, 105, 255, 0.1);">
+            <span class="text-xs font-bold" style="color: var(--violet);">4</span>
+          </div>
+          <div class="text-xs font-medium">What-If Sim</div>
+        </div>
+        <div class="p-4 rounded-xl text-center" style="background: var(--bg-card); border: 1px solid rgba(255, 68, 102, 0.2);">
+          <div class="w-8 h-8 rounded-lg mx-auto mb-2 flex items-center justify-center" style="background: rgba(255, 68, 102, 0.1);">
+            <span class="text-xs font-bold" style="color: var(--red);">5</span>
+          </div>
+          <div class="text-xs font-medium">Prereq Warnings</div>
+        </div>
+        <div class="p-4 rounded-xl text-center" style="background: var(--bg-card); border: 1px solid rgba(0, 255, 136, 0.2);">
+          <div class="w-8 h-8 rounded-lg mx-auto mb-2 flex items-center justify-center" style="background: rgba(0, 255, 136, 0.1);">
+            <span class="text-xs font-bold" style="color: var(--green);">6</span>
+          </div>
+          <div class="text-xs font-medium">Backup Plans</div>
+        </div>
+        <div class="p-4 rounded-xl text-center" style="background: var(--bg-card); border: 1px solid rgba(163, 105, 255, 0.3);">
+          <div class="w-8 h-8 rounded-lg mx-auto mb-2 flex items-center justify-center" style="background: rgba(163, 105, 255, 0.1);">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--violet)" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          </div>
+          <div class="text-xs font-medium">4-Year Plan</div>
+        </div>
+        <div class="p-4 rounded-xl text-center" style="background: var(--bg-card); border: 1px solid rgba(0, 229, 255, 0.3);">
+          <div class="w-8 h-8 rounded-lg mx-auto mb-2 flex items-center justify-center" style="background: rgba(0, 229, 255, 0.1);">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+          </div>
+          <div class="text-xs font-medium">Export</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 11: Final Reveal -->
+  <div class="slide" id="slide11">
+    <div class="max-w-5xl mx-auto w-full grid lg:grid-cols-2 gap-8 items-center">
+      <div class="space-y-6 text-center lg:text-left">
+        <div class="inline-flex items-center gap-2 badge badge-live">
+          <span class="w-2 h-2 rounded-full" style="background: var(--green);"></span>
+          LIVE NOW
+        </div>
+        <h2 class="text-4xl md:text-6xl font-bold tracking-tight">DegreeWise Is Live</h2>
+        <p class="text-lg" style="color: var(--text-secondary)">
+          Not a theory. Not just a mockup. Live, mobile-ready, and usable right now.
+        </p>
+        <ul class="space-y-3 text-sm" style="color: var(--text-secondary);">
+          <li class="flex items-center gap-3 lg:justify-start justify-center">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>
+            No account required
+          </li>
+          <li class="flex items-center gap-3 lg:justify-start justify-center">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>
+            No saved student records
+          </li>
+          <li class="flex items-center gap-3 lg:justify-start justify-center">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>
+            Built for real registration stress
+          </li>
+        </ul>
+        <p class="text-base italic" style="color: var(--cyan);">
+          DegreeWise gives every student a smarter first draft of their future.
+        </p>
+      </div>
+      
+      <div class="flex flex-col items-center gap-6">
+        <!-- QR Code -->
+        <a href="https://degreewise.fly.dev/" target="_blank" class="block transition-transform hover:scale-105" aria-label="Open DegreeWise app">
+          <div class="w-[200px] h-[200px] rounded-2xl shadow-xl flex items-center justify-center relative overflow-hidden" style="box-shadow: 0 12px 40px rgba(59, 158, 255, 0.4);">
+            <img src="qr code.svg" alt="DegreeWise QR Code" class="w-full h-full object-cover">
+          </div>
+        </a>
+        <div class="text-center mt-2">
+          <div class="text-lg font-bold mb-1">Scan to Try Now</div>
+          <a href="https://degreewise.fly.dev/" target="_blank" class="text-base font-medium hover:underline transition-all" style="color: var(--cyan);">degreewise.fly.dev</a>
+        </div>
+        
+        <!-- Mini phone mockup -->
+        <div class="phone-mockup" style="transform: scale(0.8);">
+          <div class="phone-screen w-40">
+            <div class="p-3 space-y-2">
+              <div class="text-xs font-semibold text-center" style="color: var(--cyan)">DegreeWise</div>
+              <div class="p-2 rounded-lg text-center" style="background: rgba(0, 229, 255, 0.08);">
+                <div class="text-lg font-bold" style="color: var(--cyan)">42</div>
+                <div class="text-xs" style="color: var(--green)">Low Risk</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Initialize variables first
+    const slides = document.querySelectorAll('.slide');
+    const totalSlides = slides.length;
+    const progressBar = document.getElementById('progressBar');
+    const slideCounter = document.getElementById('slideCounter');
+    const navDotsContainer = document.getElementById('navDots');
+    let currentSlide = 0;
+
+    // Create navigation dots
+    function createNavDots() {
+      for (let i = 0; i < totalSlides; i++) {
+        const dot = document.createElement('button');
+        dot.className = 'nav-dot' + (i === 0 ? ' active' : '');
+        dot.setAttribute('aria-label', 'Go to slide ' + (i + 1));
+        dot.addEventListener('click', function() { goToSlide(i); });
+        navDotsContainer.appendChild(dot);
+      }
+    }
+
+    // Update UI elements
+    function updateUI() {
+      // Progress bar
+      const progress = ((currentSlide + 1) / totalSlides) * 100;
+      progressBar.style.width = progress + '%';
+      
+      // Slide counter
+      slideCounter.textContent = String(currentSlide + 1).padStart(2, '0') + ' / ' + totalSlides;
+      
+      // Nav dots
+      const dots = navDotsContainer.querySelectorAll('.nav-dot');
+      dots.forEach(function(dot, index) {
+        dot.classList.toggle('active', index === currentSlide);
+      });
+    }
+
+    // Go to specific slide
+    function goToSlide(index) {
+      if (index === currentSlide) return;
+      
+      const prevSlide = slides[currentSlide];
+      const nextSlide = slides[index];
+      
+      // Remove active class, add exit class
+      prevSlide.classList.remove('active');
+      if (index > currentSlide) {
+        prevSlide.classList.add('exit');
+      }
+      
+      // Small delay before removing exit class
+      setTimeout(function() {
+        prevSlide.classList.remove('exit');
+      }, 600);
+      
+      // Set new active slide
+      currentSlide = index;
+      slides[currentSlide].classList.add('active');
+      
+      updateUI();
+    }
+
+    // Navigation functions
+    function nextSlide() {
+      if (currentSlide < totalSlides - 1) {
+        goToSlide(currentSlide + 1);
+      }
+    }
+
+    function prevSlide() {
+      if (currentSlide > 0) {
+        goToSlide(currentSlide - 1);
+      }
+    }
+
+    // Keyboard navigation
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+        e.preventDefault();
+        nextSlide();
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        e.preventDefault();
+        prevSlide();
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        goToSlide(0);
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        goToSlide(totalSlides - 1);
+      }
+    });
+
+    // Touch support
+    let touchStartX = 0;
+    let touchEndX = 0;
+
+    document.addEventListener('touchstart', function(e) {
+      touchStartX = e.changedTouches[0].screenX;
+    }, { passive: true });
+
+    document.addEventListener('touchend', function(e) {
+      touchEndX = e.changedTouches[0].screenX;
+      handleSwipe();
+    }, { passive: true });
+
+    function handleSwipe() {
+      const threshold = 50;
+      const diff = touchStartX - touchEndX;
+      
+      if (Math.abs(diff) > threshold) {
+        if (diff > 0) {
+          nextSlide();
+        } else {
+          prevSlide();
+        }
+      }
+    }
+
+    // Initialize
+    createNavDots();
+    updateUI();
+
+    // Reduced motion check
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    if (prefersReducedMotion.matches) {
+      document.documentElement.style.setProperty('--transition-duration', '0.01s');
+    }
+  </script>
+</body>
+</html>
