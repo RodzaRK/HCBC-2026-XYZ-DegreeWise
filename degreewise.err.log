@@ -159,3 +159,97 @@
 127.0.0.1 - - [30/Apr/2026 16:41:49] "GET /api/professors/search?name=Xiaoming+Liu&university=Southeast+Missouri+State+University HTTP/1.1" 200 -
 127.0.0.1 - - [30/Apr/2026 16:41:49] "GET /api/professors/search?name=Zhouzhou+Li&university=Southeast+Missouri+State+University HTTP/1.1" 200 -
 127.0.0.1 - - [30/Apr/2026 16:42:02] "POST /api/ai/analyze HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:14:28] "GET /api/health HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:14:29] "GET /api/professors/search?name=Emilie+Kay+Beltzer&university=Southeast+Missouri+State+University HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:14:29] "GET /api/professors/search?name=Zhouzhou+Li&university=Southeast+Missouri+State+University HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:14:29] "GET /api/professors/search?name=Bruce+W+Gentry&university=Southeast+Missouri+State+University HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:14:29] "GET /api/professors/search?name=Xiaoming+Liu&university=Southeast+Missouri+State+University HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:14:29] "GET /api/professors/search?name=Junaid+Shuja&university=Southeast+Missouri+State+University HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:14:30] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:14:30] "GET /styles.css HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:14:31] "GET /app.js HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:14:31] "GET /api/health HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:14:31] "GET /api/professors/search?name=Emilie+Kay+Beltzer&university=Southeast+Missouri+State+University HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:14:31] "GET /api/professors/search?name=Junaid+Shuja&university=Southeast+Missouri+State+University HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:14:31] "GET /api/professors/search?name=Xiaoming+Liu&university=Southeast+Missouri+State+University HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:14:31] "GET /api/professors/search?name=Bruce+W+Gentry&university=Southeast+Missouri+State+University HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:14:31] "GET /api/professors/search?name=Zhouzhou+Li&university=Southeast+Missouri+State+University HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:14:38] "POST /api/ai/analyze HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:14:38] "POST /api/ai/analyze HTTP/1.1" 500 -
+----------------------------------------
+Exception occurred during processing of request from ('127.0.0.1', 59746)
+Traceback (most recent call last):
+  File "C:\Users\HP_Laptop_2\OneDrive\Documents\Notebooks\temp_project\server.py", line 408, in handle_api_post
+    self.send_json(analyze_schedule_with_gemini(self.read_json_body()))
+  File "C:\Users\HP_Laptop_2\OneDrive\Documents\Notebooks\temp_project\server.py", line 528, in send_json
+    self.wfile.write(data)
+  File "C:\Users\HP_Laptop_2\AppData\Local\Programs\Python\Python311\Lib\socketserver.py", line 834, in write
+    self._sock.sendall(b)
+ConnectionAbortedError: [WinError 10053] An established connection was aborted by the software in your host machine
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\HP_Laptop_2\AppData\Local\Programs\Python\Python311\Lib\socketserver.py", line 691, in process_request_thread
+    self.finish_request(request, client_address)
+  File "C:\Users\HP_Laptop_2\AppData\Local\Programs\Python\Python311\Lib\socketserver.py", line 361, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "C:\Users\HP_Laptop_2\AppData\Local\Programs\Python\Python311\Lib\socketserver.py", line 755, in __init__
+    self.handle()
+  File "C:\Users\HP_Laptop_2\AppData\Local\Programs\Python\Python311\Lib\http\server.py", line 436, in handle
+    self.handle_one_request()
+  File "C:\Users\HP_Laptop_2\AppData\Local\Programs\Python\Python311\Lib\http\server.py", line 424, in handle_one_request
+    method()
+  File "C:\Users\HP_Laptop_2\OneDrive\Documents\Notebooks\temp_project\server.py", line 360, in do_POST
+    self.handle_api_post(parsed.path)
+  File "C:\Users\HP_Laptop_2\OneDrive\Documents\Notebooks\temp_project\server.py", line 427, in handle_api_post
+    self.send_json({"error": "Server error", "detail": str(exc)}, status=500)
+  File "C:\Users\HP_Laptop_2\OneDrive\Documents\Notebooks\temp_project\server.py", line 527, in send_json
+    self.end_headers()
+  File "C:\Users\HP_Laptop_2\AppData\Local\Programs\Python\Python311\Lib\http\server.py", line 538, in end_headers
+    self.flush_headers()
+  File "C:\Users\HP_Laptop_2\AppData\Local\Programs\Python\Python311\Lib\http\server.py", line 542, in flush_headers
+    self.wfile.write(b"".join(self._headers_buffer))
+  File "C:\Users\HP_Laptop_2\AppData\Local\Programs\Python\Python311\Lib\socketserver.py", line 834, in write
+    self._sock.sendall(b)
+ConnectionAbortedError: [WinError 10053] An established connection was aborted by the software in your host machine
+----------------------------------------
+127.0.0.1 - - [30/Apr/2026 17:14:44] "POST /api/ai/analyze HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:22:28] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:22:47] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:22:48] "GET /app.js HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:22:48] "GET /styles.css HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:22:48] "GET /api/health HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:22:49] code 404, message File not found
+127.0.0.1 - - [30/Apr/2026 17:22:49] "GET /favicon.ico HTTP/1.1" 404 -
+127.0.0.1 - - [30/Apr/2026 17:23:00] "POST /api/ai/analyze HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:23:41] "GET /app.js HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:28:30] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:28:30] "GET /styles.css HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:28:30] "GET /app.js HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:28:31] "GET /api/health HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:28:40] "POST /api/ai/analyze HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:29:36] "POST /api/ai/analyze HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:29:54] "POST /api/ai/analyze HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:32:41] "POST /api/degree-map/analyze HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:33:09] "POST /api/ai/analyze HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:33:42] "POST /api/ai/chat HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:34:28] "POST /api/degree-map/gened HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:34:49] "POST /api/degree-map/gened HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:34:54] "POST /api/degree-map/gened HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:35:33] "POST /api/ai/analyze HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:35:50] "POST /api/ai/analyze HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:35:56] "POST /api/ai/analyze HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:36:26] "POST /api/ai/analyze HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:36:33] "POST /api/ai/analyze HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:36:44] "POST /api/ai/analyze HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:37:14] "POST /api/ai/analyze HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:37:41] "POST /api/ai/analyze HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:37:50] "POST /api/ai/analyze HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:38:00] "POST /api/ai/analyze HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:38:10] "POST /api/ai/analyze HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:38:27] "POST /api/ai/analyze HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:38:37] "POST /api/ai/analyze HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:38:38] "POST /api/ai/analyze HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:38:52] "POST /api/ai/analyze HTTP/1.1" 200 -
+127.0.0.1 - - [30/Apr/2026 17:44:54] "POST /api/ai/chat HTTP/1.1" 200 -
